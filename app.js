@@ -286,7 +286,7 @@
     if (!qty) {
       if (variant === 'sm') return '';
       if (variant === 'modal') {
-        return `<button class="btn btn-primary btn-block" type="button" data-add="${esc(itemId)}" data-place="${esc(placeId)}">Добавить</button>`;
+        return `<button class="btn btn-primary btn-block" type="button" data-add="${esc(itemId)}" data-place="${esc(placeId)}"><span aria-hidden="true">+</span> Добавить</button>`;
       }
       return `<button class="add-btn" type="button" data-add="${esc(itemId)}" data-place="${esc(placeId)}" aria-label="Добавить"><span aria-hidden="true">+</span> Добавить</button>`;
     }
@@ -714,11 +714,14 @@
           <h2>${esc(it.name)}</h2>
           <span class="dish-unit">${esc(it.unit)}</span>
           ${it.desc ? `<p class="desc">${esc(it.desc)}</p>` : ''}
-          <span class="dish-price" style="font-size:24px;margin-top:8px">${rub(it.price)}</span>
-          <div class="dish-modal-foot">${qtySlot(p.id, it.id, 'modal')}</div>
+          <div class="dish-modal-foot">
+            <span class="dish-modal-price">${rub(it.price)}</span>
+            ${qtySlot(p.id, it.id, 'modal')}
+          </div>
         </div>
       </div>`;
     $('#dishModal').showModal();
+    $('#dishModal').focus();
   }
 
   function openInfo(placeId) {

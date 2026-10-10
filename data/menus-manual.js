@@ -10,7 +10,7 @@
       "items": [
         {
           "id": "cold-raspberry",
-          "photo": "assets/dishes/haba/cold-raspberry.jpg",
+          "photo": "assets/dishes/haba/cold-raspberry.jpg?v=4",
           "name": "Cold brew · Малина",
           "desc": "Без сахара. Минимальный заказ cold brew — от 10 шт.",
           "price": 180,
@@ -18,7 +18,7 @@
         },
         {
           "id": "cold-dogwood",
-          "photo": "assets/dishes/haba/cold-dogwood.jpg",
+          "photo": "assets/dishes/haba/cold-dogwood.jpg?v=4",
           "name": "Cold brew · Кизил",
           "desc": "Без сахара. Минимальный заказ cold brew — от 10 шт.",
           "price": 180,
@@ -26,7 +26,7 @@
         },
         {
           "id": "cold-currant",
-          "photo": "assets/dishes/haba/cold-currant.jpg",
+          "photo": "assets/dishes/haba/cold-currant.jpg?v=4",
           "name": "Cold brew · Смородина",
           "desc": "Без сахара. Минимальный заказ cold brew — от 10 шт.",
           "price": 180,
@@ -34,7 +34,7 @@
         },
         {
           "id": "cold-pomegranate-cherry",
-          "photo": "assets/dishes/haba/cold-pomegranate-cherry.jpg",
+          "photo": "assets/dishes/haba/cold-pomegranate-cherry.jpg?v=4",
           "name": "Cold brew · Гранат-вишня",
           "desc": "Без сахара. Минимальный заказ cold brew — от 10 шт.",
           "price": 180,
@@ -42,7 +42,7 @@
         },
         {
           "id": "cold-pomegranate",
-          "photo": "assets/dishes/haba/cold-pomegranate.jpg?v=2",
+          "photo": "assets/dishes/haba/cold-pomegranate.jpg?v=4",
           "name": "Cold brew · Гранат",
           "desc": "Без сахара. Минимальный заказ cold brew — от 10 шт.",
           "price": 180,
@@ -50,7 +50,7 @@
         },
         {
           "id": "cold-blackberry",
-          "photo": "assets/dishes/haba/cold-blackberry.jpg",
+          "photo": "assets/dishes/haba/cold-blackberry.jpg?v=4",
           "name": "Cold brew · Ежевика",
           "desc": "Без сахара. Минимальный заказ cold brew — от 10 шт.",
           "price": 180,
@@ -58,7 +58,7 @@
         },
         {
           "id": "cold-cherry",
-          "photo": "assets/dishes/haba/cold-cherry.jpg",
+          "photo": "assets/dishes/haba/cold-cherry.jpg?v=4",
           "name": "Cold brew · Вишня",
           "desc": "Без сахара. Минимальный заказ cold brew — от 10 шт.",
           "price": 180,
@@ -66,7 +66,7 @@
         },
         {
           "id": "cold-grape",
-          "photo": "assets/dishes/haba/cold-grape.jpg",
+          "photo": "assets/dishes/haba/cold-grape.jpg?v=4",
           "name": "Cold brew · Виноград",
           "desc": "Без сахара. Минимальный заказ cold brew — от 10 шт.",
           "price": 180,
@@ -74,7 +74,7 @@
         },
         {
           "id": "cold-concentrate",
-          "photo": "assets/dishes/haba/cold-concentrate.jpg",
+          "photo": "assets/dishes/haba/cold-concentrate.jpg?v=4",
           "name": "Cold brew · концентрат",
           "desc": "Без сахара. Минимальный заказ cold brew — от 10 шт.",
           "price": 500,
@@ -87,7 +87,7 @@
       "items": [
         {
           "id": "ciabatta-beef",
-          "photo": "assets/dishes/haba/ciabatta-beef.jpg",
+          "photo": "assets/dishes/haba/ciabatta-beef.jpg?v=4",
           "name": "Чиабатта с томлёной говядиной",
           "desc": "",
           "price": 210,
@@ -95,7 +95,7 @@
         },
         {
           "id": "ciabatta-pepperoni",
-          "photo": "assets/dishes/haba/ciabatta-pepperoni.jpg",
+          "photo": "assets/dishes/haba/ciabatta-pepperoni.jpg?v=4",
           "name": "Чиабатта пепперони и спайси",
           "desc": "",
           "price": 210,
@@ -103,7 +103,7 @@
         },
         {
           "id": "ciabatta-chicken",
-          "photo": "assets/dishes/haba/ciabatta-chicken.jpg",
+          "photo": "assets/dishes/haba/ciabatta-chicken.jpg?v=4",
           "name": "Чиабатта с курицей су-вид",
           "desc": "",
           "price": 200,
@@ -116,7 +116,7 @@
       "items": [
         {
           "id": "sandwich-beef",
-          "photo": "assets/dishes/haba/sandwich-beef.jpg",
+          "photo": "assets/dishes/haba/sandwich-beef.jpg?v=4",
           "name": "Сэндвич с томлёной говядиной",
           "desc": "",
           "price": 170,
@@ -124,7 +124,7 @@
         },
         {
           "id": "sandwich-pepperoni",
-          "photo": "assets/dishes/haba/sandwich-pepperoni.jpg",
+          "photo": "assets/dishes/haba/sandwich-pepperoni.jpg?v=4",
           "name": "Сэндвич пепперони и спайси",
           "desc": "",
           "price": 170,
@@ -132,7 +132,7 @@
         },
         {
           "id": "sandwich-chicken",
-          "photo": "assets/dishes/haba/sandwich-chicken.jpg",
+          "photo": "assets/dishes/haba/sandwich-chicken.jpg?v=4",
           "name": "Сэндвич с курицей су-вид",
           "desc": "",
           "price": 160,
@@ -145,7 +145,7 @@
       "items": [
         {
           "id": "croissant-salmon",
-          "photo": "assets/dishes/haba/croissant-salmon.jpg",
+          "photo": "assets/dishes/haba/croissant-salmon.jpg?v=4",
           "name": "Круассан с сёмгой",
           "desc": "",
           "price": 300,
@@ -153,7 +153,7 @@
         },
         {
           "id": "croissant-chicken",
-          "photo": "assets/dishes/haba/croissant-chicken.jpg",
+          "photo": "assets/dishes/haba/croissant-chicken.jpg?v=4",
           "name": "Круассан с курицей су-вид",
           "desc": "",
           "price": 250,
@@ -166,7 +166,7 @@
       "items": [
         {
           "id": "bowl-chicken",
-          "photo": "assets/dishes/haba/bowl-chicken.jpg",
+          "photo": "assets/dishes/haba/bowl-chicken.jpg?v=4",
           "name": "Боул с курицей су-вид",
           "desc": "",
           "price": 260,
@@ -174,7 +174,7 @@
         },
         {
           "id": "bowl-beef",
-          "photo": "assets/dishes/haba/bowl-beef.jpg",
+          "photo": "assets/dishes/haba/bowl-beef.jpg?v=4",
           "name": "Боул с томлёной говядиной",
           "desc": "",
           "price": 320,
@@ -187,7 +187,7 @@
       "items": [
         {
           "id": "oreshki",
-          "photo": "assets/dishes/haba/oreshki.jpg",
+          "photo": "assets/dishes/haba/oreshki.jpg?v=4",
           "name": "Орешки со сгущёнкой",
           "desc": "8 шт., 140 г",
           "price": 140,

@@ -456,7 +456,7 @@ button.hero-chip:hover { background: rgba(255,255,255,.28); }
   font-size: 40px;
   color: #c9c5bf;
 }
-.dish-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dish-photo img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .dish-info { padding: 10px 6px 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .dish-price { font-size: 18px; font-weight: 700; }
 .dish-name { font-size: 15px; line-height: 1.3; }
@@ -571,22 +571,26 @@ button.hero-chip:hover { background: rgba(255,255,255,.28); }
   box-shadow: var(--shadow-lg);
   color: var(--ink);
 }
+.modal:focus { outline: none; }
 .modal::backdrop { background: rgba(0,0,0,.45); }
 .modal h2 { font-size: 26px; font-weight: 800; letter-spacing: -.02em; margin-bottom: 18px; padding-right: 44px; }
 .modal-close { position: absolute; top: 18px; right: 18px; }
 .modal .segmented { margin-bottom: 18px; }
-.modal-dish { width: min(760px, calc(100% - 32px)); padding: 0; overflow: hidden; }
-.dish-modal { display: grid; grid-template-columns: 1fr 1fr; }
-.dish-modal-photo { aspect-ratio: 1 / 1; background: var(--surface); display: grid; place-items: center; font-size: 72px; color: #c9c5bf; }
-.dish-modal-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.modal-dish { width: min(880px, calc(100% - 32px)); padding: 0; overflow: hidden; }
+.dish-modal { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 440px; }
+/* Фото товара показывается целиком, без обрезки */
+.dish-modal-photo { background: var(--surface); display: grid; place-items: center; font-size: 72px; color: #c9c5bf; }
+.dish-modal-photo img { width: 100%; height: 100%; max-height: 80vh; object-fit: contain; display: block; }
 .dish-modal-info { padding: 32px 28px 24px; display: flex; flex-direction: column; gap: 8px; }
-.dish-modal-info h2 { margin: 0; }
-.dish-modal-info .dish-unit { margin-top: 0; padding-top: 0; }
-.dish-modal-info .desc { color: #4b4a47; line-height: 1.5; }
-.dish-modal-foot { margin-top: auto; padding-top: 20px; display: flex; gap: 10px; align-items: center; }
+.dish-modal-info h2 { margin: 0; font-size: 28px; line-height: 1.15; }
+.dish-modal-info .dish-unit { margin-top: 0; padding-top: 0; font-size: 15px; }
+.dish-modal-info .desc { color: #4b4a47; line-height: 1.5; margin-top: 8px; }
+.dish-modal-foot { margin-top: auto; padding-top: 24px; display: flex; gap: 16px; align-items: center; }
+.dish-modal-price { font-size: 26px; font-weight: 800; white-space: nowrap; }
 .dish-modal-foot > div { flex: 1; }
-.dish-modal-foot .qty { width: 132px; height: 56px; border-radius: 16px; }
-.dish-modal-foot .qty button { width: 44px; height: 56px; }
+.dish-modal-foot .btn-block { min-height: 56px; }
+.dish-modal-foot .qty { height: 56px; border-radius: 16px; }
+.dish-modal-foot .qty button { width: 56px; height: 56px; border-radius: 16px; }
 .info-list { display: grid; gap: 14px; }
 .info-row { display: grid; grid-template-columns: 28px 1fr; gap: 10px; }
 .info-row a { text-decoration: underline; }
@@ -675,6 +679,8 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
 .footer-in { max-width: 1440px; margin: 0 auto; padding: 24px 32px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 13px; color: var(--muted); }
 
 /* ---------- Адаптив ---------- */
+@keyframes sheet-up { from { transform: translateY(40px); opacity: .4; } to { transform: none; opacity: 1; } }
+
 @media (max-width: 1280px) {
   .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .place-layout { grid-template-columns: 180px minmax(0, 1fr) 320px; gap: 24px; }
@@ -736,8 +742,31 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
   .dish-price { font-size: 16px; }
   .dish-name { font-size: 14px; }
   .menu-section h2 { font-size: 22px; }
-  .dish-modal { grid-template-columns: 1fr; }
-  .dish-modal-info { padding: 20px; }
+  /* Окно товара — шторка снизу экрана */
+  .modal.modal-dish {
+    padding: 0;
+    width: 100%;
+    max-width: 100%;
+    margin: auto 0 0;
+    border-radius: 24px 24px 0 0;
+    max-height: 94vh;
+    overflow-y: auto;
+    animation: sheet-up .22s ease-out;
+  }
+  .modal.modal-dish .modal-close { top: 12px; right: 12px; background: rgba(255,255,255,.92); }
+  .dish-modal { grid-template-columns: 1fr; min-height: 0; }
+  .dish-modal-photo img { max-height: none; aspect-ratio: 1 / 1; }
+  .dish-modal-info { padding: 18px 16px 0; }
+  .dish-modal-info h2 { font-size: 22px; padding-right: 0; }
+  .dish-modal-foot {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    margin: 16px -16px 0;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    box-shadow: 0 -6px 16px rgba(0,0,0,.06);
+  }
+  .dish-modal-price { font-size: 22px; }
   .modal { padding: 22px; border-radius: 24px; }
   .row2, .row3 { grid-template-columns: 1fr; }
   .row3 { grid-template-columns: repeat(3, 1fr); }
