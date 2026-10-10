@@ -1,7 +1,7 @@
 // Заведения перенесены из проекта Halal Tracker (config.js).
 // categories: restaurant | fastfood | coffee | grocery; ownDelivery — у заведения есть доставка, по ней работает фильтр «Доставки»
 // (отметка «Доставки» из каталога Halal Tracker и заведения, добавленные вручную);
-// verified — заведение подтверждено владельцем каталога; logo — путь к логотипу; socials — [{label, url}].
+// verified — заведение подтверждено владельцем каталога; logo — путь к логотипу; cover — фото для карточки; socials — [{label, url}].
 window.DOSTAVKA_DATA = {
   "cityCenters": {
     "Махачкала": [
@@ -1486,7 +1486,8 @@ window.DOSTAVKA_DATA = {
           "url": "https://t.me/+79889429999"
         }
       ],
-      "description": "Cold brew, сэндвичи, боулы, чаи и лимонады"
+      "description": "Cold brew, сэндвичи, боулы, чаи и лимонады",
+      "cover": "assets/dishes/haba/bowl-beef.jpg"
     }
   ]
 };
