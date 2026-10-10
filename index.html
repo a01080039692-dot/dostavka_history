@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Халяль Доставка</title>
+  <meta name="description" content="Доставка еды и продуктов из проверенных халяль-заведений: выберите место на карте или в списке.">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=2">
+  <link rel="stylesheet" href="style.css?v=20">
+</head>
+<body>
+  <div class="topline">
+    <span>ХАЛЯЛЬ ДОСТАВКА · ЕДА И ПРОДУКТЫ</span>
+    <button class="topline-city" id="cityButton" type="button">ГОРОД: <b id="cityLabel">—</b> ▾</button>
+  </div>
+
+  <header class="header">
+    <a class="brand" href="#/">Халяль<span>·</span>Доставка</a>
+    <nav class="nav">
+      <a href="#/">Заведения</a>
+      <a href="#/orders">Мои заказы</a>
+    </nav>
+    <button class="cart-button" id="cartButton" type="button" aria-label="Корзина">
+      Корзина <span class="cart-count" id="cartCount">0</span>
+    </button>
+  </header>
+
+  <main id="view"></main>
+
+  <!-- Корзина -->
+  <div class="overlay" id="cartOverlay" hidden></div>
+  <aside class="drawer" id="cartDrawer" aria-label="Корзина" hidden>
+    <div class="drawer-head">
+      <h2>Корзина</h2>
+      <button class="icon-btn" id="cartClose" type="button" aria-label="Закрыть">✕</button>
+    </div>
+    <div class="drawer-body" id="cartBody"></div>
+  </aside>
+
+  <!-- Выбор города -->
+  <dialog class="modal" id="cityModal">
+    <div class="modal-head">
+      <span class="label">01 / ВАШ ГОРОД</span>
+      <h2>Куда доставить?</h2>
+    </div>
+    <div class="city-grid" id="cityGrid"></div>
+  </dialog>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <footer class="footer">
+    <span>© Халяль Доставка</span>
+    <span>Заведения — из каталога Halal Tracker. Часть меню — с Яндекс Еды, остальные демонстрационные.</span>
+  </footer>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="config.js?v=8"></script>
+  <script src="data/places.js?v=17"></script>
+  <script src="data/menus.js"></script>
+  <script src="data/menus-yandex.js?v=12"></script>
+  <script src="data/menus-manual.js?v=21"></script>
+  <script src="map.js?v=7"></script>
+  <script src="app.js?v=20"></script>
+</body>
+</html>
