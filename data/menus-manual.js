@@ -3,6 +3,7 @@
   const sources = window.DOSTAVKA_MENUS.sources = window.DOSTAVKA_MENUS.sources || {};
 
   // Haba — из публикации в Instagram от 22.06.2026: https://www.instagram.com/p/DZ4_DYhCj_i/
+  // «Орешки со сгущёнкой» — из видео, которое прислал владелец каталога 10.10.2026.
   window.DOSTAVKA_MENUS.byPlace['haba-makh'] = [
     {
       "section": "Cold brew",
@@ -178,6 +179,19 @@
           "desc": "",
           "price": 320,
           "unit": "порция"
+        }
+      ]
+    },
+    {
+      "section": "Десерты",
+      "items": [
+        {
+          "id": "oreshki",
+          "photo": "assets/dishes/haba/oreshki.jpg",
+          "name": "Орешки со сгущёнкой",
+          "desc": "8 шт., 140 г. Состав: мука, масло сливочное, сахарная пудра, желток, варёная сгущёнка.",
+          "price": 140,
+          "unit": "стаканчик"
         }
       ]
     },
