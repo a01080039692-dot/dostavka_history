@@ -693,14 +693,18 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
   .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .place-layout { grid-template-columns: minmax(0, 1fr); }
   .menu-nav {
+    top: var(--header-h);
     flex-direction: row;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
     gap: 6px;
     background: #fff;
     z-index: 5;
-    padding: 8px 0;
-    margin: -8px 0 8px;
+    padding: 10px 16px;
+    margin: -8px -16px 8px;
     scrollbar-width: none;
+    box-shadow: 0 6px 12px -10px rgba(0,0,0,.25);
   }
   .menu-nav::-webkit-scrollbar { display: none; }
   .menu-nav a { white-space: nowrap; background: var(--surface); }
@@ -716,6 +720,12 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
 }
 
 @media (max-width: 720px) {
+  /* Размытие фона под липкими элементами на телефонах заметно тормозит прокрутку */
+  .header { backdrop-filter: none; background: #fff; }
+  .hero-chip { backdrop-filter: none; background: rgba(0,0,0,.35); }
+  .place-hero .hero-bg img { filter: none; transform: none; }
+  .dish { transition: none; }
+  .place { padding-bottom: 96px; }
   .wrap { padding: 0 16px; }
   .header-in { padding: 0 16px; gap: 8px; height: 64px; }
   :root { --header-h: 64px; }

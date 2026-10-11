@@ -615,7 +615,7 @@
   function dishCardHtml(p, it) {
     return `
       <article class="dish" data-dish="${esc(it.id)}" data-place="${esc(p.id)}">
-        <div class="dish-photo">${it.photo ? `<img src="${esc(it.photo)}" alt="${esc(it.name)}" loading="lazy">` : '<span aria-hidden="true">🍽</span>'}</div>
+        <div class="dish-photo">${it.photo ? `<img src="${esc(it.photo)}" alt="${esc(it.name)}" loading="lazy" decoding="async">` : '<span aria-hidden="true">🍽</span>'}</div>
         <div class="dish-info">
           <span class="dish-price">${rub(it.price)}</span>
           <span class="dish-name">${esc(it.name)}</span>
@@ -686,21 +686,47 @@
   }
 
   let spy = null;
+  let jumpLockUntil = 0;
+
+  const isNarrow = () => window.matchMedia('(max-width: 1024px)').matches;
+
+  function setActiveSection(id) {
+    const nav = $('#menuNav');
+    if (!nav) return;
+    $$('a', nav).forEach((a) => {
+      const on = a.dataset.jump === id;
+      a.classList.toggle('is-active', on);
+      // На телефоне лента разделов прокручивается вбок сама по себе — страницу не трогаем.
+      if (on && isNarrow()) {
+        const left = a.offsetLeft - (nav.clientWidth - a.offsetWidth) / 2;
+        nav.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+      }
+    });
+  }
+
   function setupScrollSpy() {
     if (spy) spy.disconnect();
-    const links = $$('#menuNav a');
-    if (!links.length || !('IntersectionObserver' in window)) return;
+    if (!$('#menuNav') || !('IntersectionObserver' in window)) return;
     spy = new IntersectionObserver((entries) => {
-      entries.forEach((en) => {
-        if (!en.isIntersecting) return;
-        links.forEach((a) => {
-          const on = a.dataset.jump === en.target.id;
-          a.classList.toggle('is-active', on);
-          if (on && window.matchMedia('(max-width: 1024px)').matches) a.scrollIntoView({ inline: 'center', block: 'nearest' });
-        });
-      });
-    }, { rootMargin: '-30% 0px -60% 0px' });
+      // Пока страница едет к выбранному разделу, промежуточные разделы не подсвечиваем.
+      if (Date.now() < jumpLockUntil) return;
+      const hit = entries.find((en) => en.isIntersecting);
+      if (hit) setActiveSection(hit.target.id);
+    }, { rootMargin: '-35% 0px -60% 0px' });
     $$('.menu-section').forEach((s) => spy.observe(s));
+  }
+
+  // Переход к разделу с учётом шапки и липкой ленты разделов.
+  function jumpToSection(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const header = $('.header').offsetHeight;
+    const nav = $('#menuNav');
+    const navH = isNarrow() && nav ? nav.offsetHeight : 0;
+    const top = el.getBoundingClientRect().top + window.scrollY - header - navH - 12;
+    setActiveSection(id);
+    jumpLockUntil = Date.now() + 900;
+    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
   }
 
   function openDish(placeId, itemId) {
@@ -1023,7 +1049,7 @@
       renderResults();
       return;
     }
-    if (d.jump) { e.preventDefault(); const el = document.getElementById(d.jump); if (el) el.scrollIntoView({ behavior: 'smooth' }); return; }
+    if (d.jump) { e.preventDefault(); jumpToSection(d.jump); return; }
     if (d.placeRow && !e.target.closest('a')) { highlight(d.placeRow, true); return; }
     if (d.copy) {
       const o = state.orders.find((x) => x.id === d.copy);
