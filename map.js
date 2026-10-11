@@ -148,7 +148,7 @@
       setRoute(path) {
         if (route) { route.destroy(); route = null; }
         if (path && path.length > 1) {
-          route = new mapgl.Polyline(map, { coordinates: path.map(toLonLat), width: 6, color: '#8a1538' });
+          route = new mapgl.Polyline(map, { coordinates: path.map(toLonLat), width: 6, color: '#6B4A2E' });
         }
       },
       fitTo(points) { fit(points); },
@@ -231,7 +231,7 @@
           points.push(p.coords);
         });
         if (userPos) {
-          userMarker = L.circleMarker(userPos, { radius: 8, color: '#7d1730', fillOpacity: 0.8 }).addTo(map).bindTooltip('Вы здесь');
+          userMarker = L.circleMarker(userPos, { radius: 8, color: '#6B4A2E', fillOpacity: 0.8 }).addTo(map).bindTooltip('Вы здесь');
           points.push(userPos);
         }
         if (points.length > 1) map.fitBounds(points, { padding: [FIT_PADDING, FIT_PADDING], maxZoom: MAX_FIT_ZOOM });
@@ -257,7 +257,7 @@
       removeMarker(id) { if (extra[id]) { extra[id].m.remove(); delete extra[id]; } },
       setRoute(path) {
         if (route) { route.remove(); route = null; }
-        if (path && path.length > 1) route = L.polyline(path, { color: '#8a1538', weight: 6, opacity: 0.9 }).addTo(map);
+        if (path && path.length > 1) route = L.polyline(path, { color: '#6B4A2E', weight: 6, opacity: 0.9 }).addTo(map);
       },
       fitTo(points) {
         if (points.length > 1) map.fitBounds(points, { padding: [FIT_PADDING, FIT_PADDING], maxZoom: MAX_FIT_ZOOM });
