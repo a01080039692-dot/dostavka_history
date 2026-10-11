@@ -23,14 +23,11 @@
     delivery: '🛵'
   };
 
-  const DELIVERY = { fee: 150, freeFrom: 2000, minOrder: 500 };
+  // Минимальная сумма заказа в заведении. Стоимость доставки считается по тарифу «Курьер» (delivery.js).
+  const DELIVERY = { minOrder: 500 };
+  const DL = window.DostavkaDelivery;
+  const COURIER = DL.TARIFFS.courier;
 
-  const STATUSES = [
-    { key: 'new', label: 'Принят', icon: '📝' },
-    { key: 'cooking', label: 'Готовится', icon: '👨‍🍳' },
-    { key: 'onway', label: 'В пути', icon: '🛵' },
-    { key: 'delivered', label: 'Доставлен', icon: '✅' }
-  ];
 
   // Города, где работает доставка. Заведения остальных городов остаются в data/places.js,
   // но на сайте не показываются — чтобы подключить город, добавьте его сюда.
@@ -72,7 +69,11 @@
     userPos: null,
     cart: store.get('cart', { placeId: null, items: {} }),
     orders: store.get('orders', []),
-    activePlaceId: null
+    activePlaceId: null,
+    // Адрес доставки: { label, full, city, coords, flat, entrance, floor, intercom, courier }
+    address: store.get('address', null),
+    door: store.get('door', true),
+    quote: null
   };
 
   // Сохранённые город и корзина могли остаться от города, который отключили.
@@ -230,8 +231,40 @@
 
   function cartTotals() {
     const subtotal = cartLines().reduce((s, l) => s + l.item.price * l.qty, 0);
-    const fee = subtotal === 0 || subtotal >= DELIVERY.freeFrom ? 0 : DELIVERY.fee;
-    return { subtotal, fee, total: subtotal + fee, canOrder: subtotal >= DELIVERY.minOrder };
+    const q = currentQuote();
+    // Пока адрес не указан, показываем минимальную стоимость тарифа «Курьер».
+    const fee = subtotal === 0 ? 0 : q ? q.price.total : COURIER.min;
+    return { subtotal, fee, feeKnown: !!q, quote: q, total: subtotal + fee, canOrder: subtotal >= DELIVERY.minOrder };
+  }
+
+  // ---------- Расчёт доставки ----------
+  function quoteKey() {
+    const p = placeById(state.cart.placeId);
+    const a = state.address;
+    if (!p || !p.coords || !a || !a.coords) return null;
+    return p.id + '|' + a.coords.join(',') + '|' + (state.door ? 1 : 0);
+  }
+
+  function currentQuote() {
+    const k = quoteKey();
+    return k && state.quote && state.quote.key === k ? state.quote : null;
+  }
+
+  let quotePending = null;
+  function ensureQuote() {
+    const k = quoteKey();
+    if (!k || currentQuote() || quotePending === k) return;
+    quotePending = k;
+    const p = placeById(state.cart.placeId);
+    const a = state.address;
+    DL.route(p.coords, a.coords).then((r) => {
+      if (quotePending === k) quotePending = null;
+      if (quoteKey() !== k) return;
+      const outOfCity = !!(a.city && a.city !== p.city);
+      state.quote = { key: k, route: r, price: DL.price('courier', r.distance, { outOfCity, door: state.door }) };
+      renderCartIndicators();
+      refreshAfterCartChange(null, null);
+    });
   }
 
   function cartCount() {
@@ -256,6 +289,7 @@
     if (cartCount() === 0) state.cart.placeId = null;
     saveCart();
     refreshAfterCartChange(placeId, itemId);
+    ensureQuote();
   }
 
   function clearCart() {
@@ -274,9 +308,12 @@
     });
     const panel = $('#cartPanel');
     if (panel) panel.innerHTML = cartHtml('panel');
+    if (!$('#cartDrawer').hidden) renderCartDrawer();
     if (location.hash.startsWith('#/checkout')) {
       if (!cartCount()) { renderCheckout(); return; }
       $('#checkoutSummary').innerHTML = summaryHtml();
+      const dq = $('#deliveryQuote');
+      if (dq) dq.innerHTML = deliveryQuoteHtml();
     }
   }
 
@@ -305,19 +342,26 @@
     return item.photo ? `<img src="${esc(item.photo)}" alt="" loading="lazy">` : '🍽';
   }
 
+  const fmtKm = (m) => (m / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' км';
+  const fmtMin = (s) => Math.max(1, Math.round(s / 60)) + ' мин';
+
   function freeProgressHtml(t) {
     if (!t.subtotal) return '';
-    if (t.fee === 0) return '<div class="free-progress">🎉 Доставка бесплатная</div>';
-    const pct = Math.min(100, Math.round((t.subtotal / DELIVERY.freeFrom) * 100));
-    return `<div class="free-progress">Ещё ${rub(DELIVERY.freeFrom - t.subtotal)} до бесплатной доставки
-      <div class="track"><i style="width:${pct}%"></i></div></div>`;
+    if (t.quote) {
+      return `<div class="free-progress">🛵 Курьер · ${fmtKm(t.quote.route.distance)} · в пути ~${fmtMin(t.quote.route.duration)}${state.door ? ' · до двери' : ''}</div>`;
+    }
+    const p = placeById(state.cart.placeId);
+    if (state.address && p && !p.coords) {
+      return `<div class="free-progress">У заведения нет точки на карте — показана минимальная стоимость доставки, точную назовёт курьер.</div>`;
+    }
+    return `<button class="free-progress addr-prompt" type="button" data-pick-address>📍 Укажите адрес — рассчитаем доставку: от ${rub(COURIER.min)}, ${COURIER.perKmCity} ₽/км</button>`;
   }
 
   function totalsHtml(t) {
     return `<div class="totals">
       <div><span>Товары</span><span>${rub(t.subtotal)}</span></div>
-      <div><span>Доставка</span><span>${t.fee ? rub(t.fee) : 'бесплатно'}</span></div>
-      <div class="total"><span>Итого</span><span>${rub(t.total)}</span></div>
+      <div><span>Доставка</span><span>${t.feeKnown ? rub(t.fee) : 'от ' + rub(t.fee)}</span></div>
+      <div class="total"><span>Итого</span><span>${t.feeKnown ? '' : 'от '}${rub(t.total)}</span></div>
     </div>`;
   }
 
@@ -383,8 +427,12 @@
   // ---------- Город и адрес ----------
   function renderAddressButton() {
     $('#cityLabel').textContent = state.city || 'Выберите город';
-    const c = customer();
-    $('#addressLabel').textContent = c.address ? addressLine(c) : 'Укажите адрес доставки';
+    $('#addressLabel').textContent = state.address ? addressText(state.address) : 'Укажите адрес доставки';
+  }
+
+  function addressText(a) {
+    return [a.label, a.flat && 'кв. ' + a.flat, a.entrance && 'подъезд ' + a.entrance, a.floor && 'этаж ' + a.floor]
+      .filter(Boolean).join(', ');
   }
 
   function renderCitySwitch(container) {
@@ -392,26 +440,41 @@
       `<button type="button" data-city="${esc(c)}" aria-pressed="${c === state.city}">${esc(c)}</button>`).join('');
   }
 
-  function openAddressModal() {
-    renderCitySwitch($('#cityGrid'));
-    const c = customer();
-    const f = $('#addressForm');
-    f.address.value = c.address || '';
-    f.flat.value = c.flat || '';
-    f.entrance.value = c.entrance || '';
-    f.floor.value = c.floor || '';
-    const modal = $('#addressModal');
-    if (!modal.open) modal.showModal();
-  }
-
   function setCity(city) {
     if (city === state.city) return;
     state.city = city;
     store.set('city', city);
     renderAddressButton();
-    if ($('#addressModal').open) renderCitySwitch($('#cityGrid'));
+    if ($('#addressModal').open) {
+      renderCitySwitch($('#cityGrid'));
+      picker.recenter();
+      if (!location.hash || location.hash === '#/' || location.hash === '#') renderHome();
+      return;
+    }
     if (!location.hash || location.hash === '#/' || location.hash === '#') renderHome();
-    else if (!location.hash.startsWith('#/checkout')) location.hash = '#/';
+    else if (!location.hash.startsWith('#/checkout') && !location.hash.startsWith('#/send')) location.hash = '#/';
+  }
+
+  function setAddress(addr) {
+    state.address = addr;
+    store.set('address', addr);
+    if (addr && addr.city && ACTIVE_CITIES.includes(addr.city) && addr.city !== state.city) {
+      state.city = addr.city;
+      store.set('city', addr.city);
+    }
+    renderAddressButton();
+    renderCartIndicators();
+    refreshAfterCartChange(null, null);
+    ensureQuote();
+  }
+
+  function openAddressModal() {
+    picker.open({
+      title: 'Куда доставить?',
+      value: state.address,
+      details: true,
+      onDone: (addr) => { setAddress(addr); toast('Адрес доставки сохранён'); }
+    });
   }
 
   // ---------- Главная ----------
@@ -446,7 +509,7 @@
   }
 
   function placeMeta(p) {
-    const parts = [CATEGORIES[p.categories[0]], 'Доставка ' + rub(DELIVERY.fee)];
+    const parts = [CATEGORIES[p.categories[0]], 'Доставка от ' + rub(COURIER.min)];
     if (state.userPos && p.coords) parts.push(distanceKm(state.userPos, p.coords).toFixed(1) + ' км');
     else parts.push(p.address || 'Адрес уточняется');
     return esc(parts.join(' · '));
@@ -487,7 +550,7 @@
     destroyMap();
     if (!state.city) {
       $('#view').innerHTML = '<div class="wrap home"><p class="empty">Выберите город доставки.</p></div>';
-      openAddressModal();
+      if (!$('#addressModal').open) openAddressModal();
       return;
     }
     $('#view').innerHTML = `
@@ -502,6 +565,10 @@
             <p>Рестораны, фастфуд, кофейни и мясные магазины ${esc(state.city === 'Каспийск' ? 'Каспийска' : 'Махачкалы')} — только из проверенного каталога.</p>
           </div>
           <span class="promo-emoji" aria-hidden="true">🥙</span>
+        </section>
+        <section class="services" aria-label="Услуги курьера">
+          <a class="service" href="#/send/courier"><span class="service-icon" aria-hidden="true">🛵</span><span><b>Курьер</b><small>Отправить посылку или документы — от ${rub(DL.TARIFFS.courier.min)}</small></span></a>
+          <a class="service" href="#/send/buy"><span class="service-icon" aria-hidden="true">🛍️</span><span><b>Купим и привезём</b><small>Курьер купит что нужно — от ${rub(DL.TARIFFS.buy.min)}</small></span></a>
         </section>
         <nav class="cats" id="chips" aria-label="Категории">
           ${Object.entries(CATEGORIES).map(([k, v]) => `
@@ -658,7 +725,7 @@
               <h1>${esc(p.name)}</h1>
               ${p.description ? `<p>${esc(p.description)}</p>` : ''}
               <div class="hero-chips">
-                <span class="hero-chip">🛵 Доставка ${rub(DELIVERY.fee)}, от ${rub(DELIVERY.freeFrom)} — бесплатно</span>
+                <span class="hero-chip">🛵 Курьер от ${rub(COURIER.min)} · ${COURIER.perKmCity} ₽/км</span>
                 <span class="hero-chip">Заказ от ${rub(DELIVERY.minOrder)}</span>
                 ${p.workingHours ? `<span class="hero-chip">🕒 ${esc(p.workingHours)}</span>` : ''}
                 ${p.verified ? '<span class="hero-chip">✓ Проверено</span>' : ''}
@@ -766,13 +833,232 @@
         <div class="info-row"><span>📍</span><span>${esc(p.city)}, ${esc(p.address || 'адрес уточняется')}</span></div>
         ${p.workingHours ? `<div class="info-row"><span>🕒</span><span>${esc(p.workingHours)}</span></div>` : ''}
         ${phones ? `<div class="info-row"><span>☎</span><span>${phones}</span></div>` : ''}
-        <div class="info-row"><span>🛵</span><span>Доставка ${rub(DELIVERY.fee)}, бесплатно от ${rub(DELIVERY.freeFrom)}. Минимальный заказ — ${rub(DELIVERY.minOrder)}.</span></div>
+        <div class="info-row"><span>🛵</span><span>Доставка по тарифу «Курьер»: от ${rub(COURIER.min)}, ${COURIER.perKmCity} ₽/км по городу, ${COURIER.perKmOut} ₽/км за городом. Курьер поднимется к двери — ${rub(COURIER.doorFee)}. Минимальный заказ — ${rub(DELIVERY.minOrder)}.</span></div>
         ${links ? `<div class="info-links">${links}</div>` : ''}
       </div>`;
     $('#infoModal').showModal();
   }
 
+  // ---------- Выбор адреса на карте ----------
+  // Как в такси-приложениях: двигаете карту под пином или ищете адрес строкой.
+  const picker = (function () {
+    let cfg = null;
+    let pmap = null;
+    let picked = null;
+    let token = 0;
+    // После программного перелёта карты к адресу её события «сдвинули» приходят несколько раз —
+    // в это окно не перезаписываем выбранный адрес адресом под пином.
+    let suppressUntil = 0;
+    let suggestTimer = null;
+    let reverseTimer = null;
+
+    const modal = () => $('#addressModal');
+
+    function renderPicked() {
+      const box = $('#pickerPicked');
+      if (!picked) { box.innerHTML = '<span class="muted">Передвиньте карту или найдите адрес</span>'; return; }
+      box.innerHTML = `<b>${esc(picked.label)}</b><span class="muted">${esc(picked.city || '')}</span>`;
+    }
+
+    function renderSaved() {
+      const list = DL.savedAddresses();
+      $('#pickerSaved').innerHTML = list.length
+        ? `<div class="saved-title">Мои адреса</div>${list.map((a, i) => `
+            <button class="saved-item" type="button" data-saved="${i}">
+              <span class="saved-icon" aria-hidden="true">${a.tag === 'home' ? '🏠' : a.tag === 'work' ? '💼' : '📍'}</span>
+              <span><b>${esc(a.tag === 'home' ? 'Дом' : a.tag === 'work' ? 'Работа' : a.label)}</b>
+              <small>${esc(a.tag ? a.label : a.city || '')}</small></span>
+            </button>`).join('')}`
+        : '';
+    }
+
+    function choose(addr, move) {
+      picked = { ...addr };
+      renderPicked();
+      $('#pickerSuggest').innerHTML = '';
+      if (move && pmap && addr.coords) { suppressUntil = Date.now() + 1500; pmap.setView(addr.coords, 17); }
+    }
+
+    function onMove(center) {
+      if (Date.now() < suppressUntil) return;
+      clearTimeout(reverseTimer);
+      $('#pickerPicked').innerHTML = '<span class="muted">Определяем адрес…</span>';
+      reverseTimer = setTimeout(() => {
+        DL.reverse(center).then((a) => {
+          picked = a || { label: 'Точка на карте', full: '', city: state.city, coords: center };
+          renderPicked();
+        }).catch(() => { picked = { label: 'Точка на карте', city: state.city, coords: center }; renderPicked(); });
+      }, 350);
+    }
+
+    function onSearch(q) {
+      clearTimeout(suggestTimer);
+      if (!q.trim()) { $('#pickerSuggest').innerHTML = ''; return; }
+      suggestTimer = setTimeout(() => {
+        const near = pmap ? pmap.getCenter() : cityCenter(state.city);
+        DL.suggest(q, near).then((items) => {
+          $('#pickerSuggest').innerHTML = items.length
+            ? items.map((a, i) => `<button class="suggest-item" type="button" data-suggest="${i}"><b>${esc(a.label)}</b><small>${esc(a.full)}</small></button>`).join('')
+            : '<div class="hint" style="padding:8px 4px">Ничего не нашлось</div>';
+          $('#pickerSuggest').items = items;
+        }).catch(() => { $('#pickerSuggest').innerHTML = '<div class="hint">Поиск адреса недоступен</div>'; });
+      }, 300);
+    }
+
+    function open(options) {
+      cfg = options;
+      picked = options.value && options.value.coords ? { ...options.value } : null;
+      $('#pickerTitle').textContent = options.title || 'Адрес';
+      renderCitySwitch($('#cityGrid'));
+      $('#cityGrid').hidden = !!options.hideCity;
+      $('#pickerSearch').value = '';
+      $('#pickerSuggest').innerHTML = '';
+      const d = options.value || {};
+      const f = $('#addressForm');
+      $('#pickerDetails').hidden = !options.details;
+      ['flat', 'entrance', 'floor', 'intercom', 'courier'].forEach((k) => { f[k].value = d[k] || ''; });
+      $$('[data-tag]', f).forEach((b) => b.setAttribute('aria-pressed', String((d.tag || '') === b.dataset.tag)));
+      renderSaved();
+      renderPicked();
+      if (!modal().open) modal().showModal();
+      const t = ++token;
+      const center = picked ? picked.coords : cityCenter(state.city);
+      if (pmap) { pmap.destroy(); pmap = null; }
+      if (!DL.hasGeo()) {
+        $('#pickerMap').innerHTML = '<p class="empty">Карта недоступна — введите адрес строкой.</p>';
+        return;
+      }
+      window.DostavkaMap.create($('#pickerMap'), {
+        center, pinHtml: () => '', popupHtml: () => '', onSelect: () => {}
+      }).then((m) => {
+        if (t !== token || !modal().open) { m.destroy(); return; }
+        pmap = m;
+        pmap.setView(center, picked ? 17 : 14);
+        pmap.onMoveEnd(onMove);
+        if (!picked) onMove(center);
+      });
+    }
+
+    function close() {
+      token += 1;
+      if (pmap) { pmap.destroy(); pmap = null; }
+      if (modal().open) modal().close();
+    }
+
+    function done() {
+      const f = $('#addressForm');
+      let addr = picked;
+      const typed = $('#pickerSearch').value.trim();
+      if (!addr && typed) addr = { label: typed, full: typed, city: state.city, coords: null };
+      if (!addr) { toast('Выберите адрес на карте или в поиске'); return; }
+      const tagBtn = $('[data-tag][aria-pressed="true"]', f);
+      const tag = tagBtn ? tagBtn.dataset.tag : '';
+      if (cfg.details) ['flat', 'entrance', 'floor', 'intercom', 'courier'].forEach((k) => { addr[k] = f[k].value.trim(); });
+      addr.tag = tag;
+      if (addr.coords) DL.rememberAddress(addr, tag);
+      const cb = cfg.onDone;
+      close();
+      cb(addr);
+    }
+
+    function recenter() { if (pmap) pmap.setView(cityCenter(state.city), 14); }
+
+    function locate() {
+      locateUser((pos) => { if (pmap) pmap.setView([pos.coords.latitude, pos.coords.longitude], 17); });
+    }
+
+    $('#pickerSearch').addEventListener('input', (e) => onSearch(e.target.value));
+    $('#pickerSuggest').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-suggest]');
+      if (b) choose($('#pickerSuggest').items[+b.dataset.suggest], true);
+    });
+    $('#pickerSaved').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-saved]');
+      if (b) {
+        const a = DL.savedAddresses()[+b.dataset.saved];
+        choose(a, true);
+        if (cfg.details) {
+          const f = $('#addressForm');
+          ['flat', 'entrance', 'floor', 'intercom', 'courier'].forEach((k) => { f[k].value = a[k] || ''; });
+        }
+      }
+    });
+    $('#addressForm').addEventListener('submit', (e) => { e.preventDefault(); done(); });
+    $('#addressForm').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-tag]');
+      if (b) $$('[data-tag]', e.currentTarget).forEach((x) => x.setAttribute('aria-pressed', String(x === b && x.getAttribute('aria-pressed') !== 'true')));
+    });
+    $('#pickerLocate').addEventListener('click', locate);
+    modal().addEventListener('close', () => { token += 1; if (pmap) { pmap.destroy(); pmap = null; } });
+
+    return { open, close, recenter };
+  })();
+
   // ---------- Оформление ----------
+  function whenOptionsHtml(prefix) {
+    return `
+      <div class="choice-grid">
+        <label class="choice"><input type="radio" name="when" value="asap" checked> Как можно скорее</label>
+        <label class="choice"><input type="radio" name="when" value="time"> Предварительный заказ
+          <input id="${prefix}-time" name="time" type="time" disabled class="time-input"></label>
+      </div>`;
+  }
+
+  function bindWhen(prefix) {
+    $$('input[name="when"]').forEach((r) => r.addEventListener('change', () => {
+      const t = $('#' + prefix + '-time');
+      t.disabled = $('input[name="when"]:checked').value !== 'time';
+      if (!t.disabled) t.focus();
+    }));
+  }
+
+  function scheduledFrom(form) {
+    const f = new FormData(form);
+    if (f.get('when') !== 'time' || !f.get('time')) return null;
+    const [h, m] = String(f.get('time')).split(':').map(Number);
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    if (d.getTime() < Date.now() + 10 * 60000) d.setDate(d.getDate() + 1);
+    return d.getTime();
+  }
+
+  function tariffCardHtml(tariff, q, extra) {
+    const p = q && q.price;
+    return `
+      <div class="tariff is-selected">
+        <span class="tariff-icon" aria-hidden="true">${tariff.icon}</span>
+        <div class="tariff-main">
+          <b>${esc(tariff.name)}</b>
+          <small>${esc(tariff.about)}</small>
+          ${q ? `<small>${fmtKm(q.route.distance)} · в пути ~${fmtMin(q.route.duration)}${q.route.source === 'estimate' ? ' · примерно, по прямой' : ''}</small>` : ''}
+        </div>
+        <b class="tariff-price">${p ? rub(p.total) : 'от ' + rub(tariff.min)}</b>
+      </div>
+      ${p ? `<div class="breakdown">
+        <div><span>Поездка: ${fmtKm(q.route.distance)} × ${p.rate} ₽/км${p.outOfCity ? ' (за город)' : ''}${p.ride === tariff.min ? ', но не меньше минимальной' : ''}</span><span>${rub(p.ride)}</span></div>
+        ${p.door ? `<div><span>Выход курьера к двери</span><span>${rub(p.door)}</span></div>` : ''}
+      </div>` : ''}
+      <label class="check"><input type="checkbox" id="doorOpt" ${state.door ? 'checked' : ''}> Курьер поднимется к двери <span class="muted">+${rub(tariff.doorFee)}</span></label>
+      <p class="hint">${tariff.freeWaitMin} мин ожидания бесплатно, дальше ${tariff.waitPerMin} ₽/мин. ${extra || ''}</p>`;
+  }
+
+  function deliveryQuoteHtml() {
+    const place = placeById(state.cart.placeId);
+    const q = currentQuote();
+    const note = !place.coords ? 'У заведения нет точки на карте — точную стоимость назовёт курьер.' : !state.address || !state.address.coords ? 'Укажите адрес — посчитаем по маршруту.' : q ? '' : 'Считаем маршрут…';
+    return tariffCardHtml(COURIER, q, note);
+  }
+
+  function addressCardHtml(a, emptyText, attr) {
+    return `<button class="addr-card" type="button" ${attr}>
+      <span class="addr-card-icon" aria-hidden="true">📍</span>
+      <span class="addr-card-text">${a
+        ? `<b>${esc(a.label)}</b><small>${esc([a.city, a.flat && 'кв. ' + a.flat, a.entrance && 'подъезд ' + a.entrance, a.floor && 'этаж ' + a.floor, a.intercom && 'домофон ' + a.intercom].filter(Boolean).join(', '))}</small>`
+        : `<b>${esc(emptyText)}</b><small>Улица, дом или точка на карте</small>`}</span>
+      <span class="addr-card-go" aria-hidden="true">›</span>
+    </button>`;
+  }
+
   function summaryHtml() {
     const place = placeById(state.cart.placeId);
     const t = cartTotals();
@@ -787,13 +1073,12 @@
             <div class="cart-line-right"><span class="cart-line-sum">${rub(l.item.price * l.qty)}</span>${qtyControl(place.id, l.item.id, 'sm')}</div>
           </div>`).join('')}
       </div>
-      ${freeProgressHtml(t)}
       ${totalsHtml(t)}
       ${t.canOrder ? '' : `<p class="hint warn" style="margin-bottom:10px">Минимальная сумма заказа — ${rub(DELIVERY.minOrder)}.</p>`}
       <button class="btn btn-primary btn-block" id="submitOrder" type="submit" form="checkoutForm" ${t.canOrder ? '' : 'disabled'}>
-        <span>Оформить заказ</span><span class="btn-sum">${rub(t.total)}</span>
+        <span>Заказать</span><span class="btn-sum">${t.feeKnown ? '' : 'от '}${rub(t.total)}</span>
       </button>
-      <p class="hint" style="margin-top:10px">Оплата при получении. После оформления заказ нужно отправить заведению в WhatsApp.</p>`;
+      <p class="hint" style="margin-top:10px">Оплата при получении. Курьера назначим сразу после заказа.</p>`;
   }
 
   function renderCheckout() {
@@ -802,34 +1087,27 @@
       return;
     }
     const c = customer();
-    const city = placeById(state.cart.placeId).city;
+    const place = placeById(state.cart.placeId);
     $('#view').innerHTML = `
       <div class="wrap page">
-        <a class="back" href="#/place/${esc(state.cart.placeId)}">← Вернуться в меню</a>
+        <a class="back" href="#/place/${esc(place.id)}">← Вернуться в меню</a>
         <h1 class="page-title">Оформление заказа</h1>
         <div class="checkout">
           <form class="form" id="checkoutForm" novalidate>
             <section class="block">
-              <h2>Адрес доставки · ${esc(city)}</h2>
-              <div class="form">
-                <div class="field"><label for="f-address">Улица и дом</label><input id="f-address" name="address" required autocomplete="street-address" placeholder="Например, проспект Гамидова, 12" value="${esc(c.address || '')}"></div>
-                <div class="row3">
-                  <div class="field"><label for="f-flat">Кв./офис</label><input id="f-flat" name="flat" value="${esc(c.flat || '')}"></div>
-                  <div class="field"><label for="f-entrance">Подъезд</label><input id="f-entrance" name="entrance" value="${esc(c.entrance || '')}"></div>
-                  <div class="field"><label for="f-floor">Этаж</label><input id="f-floor" name="floor" value="${esc(c.floor || '')}"></div>
-                </div>
-                <div class="field"><label for="f-courier">Комментарий курьеру</label><input id="f-courier" name="courier" placeholder="Например, домофон не работает — позвоните" value="${esc(c.courier || '')}"></div>
-                <button class="locate" type="button" id="useLocation">📍 Отправить курьеру мою геопозицию</button>
-                <span class="hint" id="geoHint"></span>
+              <h2>Маршрут</h2>
+              <div class="route-points">
+                <div class="route-point"><span class="dot dot-a">A</span><div><b>${esc(place.name)}</b><small>${esc(place.address || 'адрес уточняется')}</small></div></div>
+                <div class="route-point"><span class="dot dot-b">B</span><div style="flex:1">${addressCardHtml(state.address, 'Куда доставить?', 'data-pick-address')}</div></div>
               </div>
             </section>
             <section class="block">
+              <h2>Тариф</h2>
+              <div id="deliveryQuote">${deliveryQuoteHtml()}</div>
+            </section>
+            <section class="block">
               <h2>Когда доставить</h2>
-              <div class="choice-grid">
-                <label class="choice"><input type="radio" name="when" value="asap" checked> Как можно скорее</label>
-                <label class="choice"><input type="radio" name="when" value="time"> Ко времени
-                  <input id="f-time" name="time" type="time" disabled style="margin-left:auto;border:0;background:var(--surface);border-radius:10px;padding:6px 8px"></label>
-              </div>
+              ${whenOptionsHtml('f')}
             </section>
             <section class="block">
               <h2>Получатель</h2>
@@ -853,60 +1131,69 @@
           <aside class="cart-panel summary" id="checkoutSummary">${summaryHtml()}</aside>
         </div>
       </div>`;
-
-    $$('input[name="when"]').forEach((r) => r.addEventListener('change', () => {
-      const t = $('#f-time');
-      t.disabled = $('input[name="when"]:checked').value !== 'time';
-      if (!t.disabled) t.focus();
-    }));
-    $('#useLocation').addEventListener('click', () => {
-      locateUser((pos) => {
-        $('#geoHint').textContent = `Геопозиция добавлена: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`;
-      });
-    });
+    bindWhen('f');
     $('#checkoutForm').addEventListener('submit', submitOrder);
+    ensureQuote();
   }
 
-  function submitOrder(e) {
-    e.preventDefault();
-    const f = new FormData(e.target);
-    const v = (k) => String(f.get(k) || '').trim();
+  function formError(text) {
     const err = $('#formError');
-    const phoneDigits = v('phone').replace(/\D/g, '');
-    let problem = '';
-    if (!v('address')) problem = 'Укажите адрес доставки.';
-    else if (!v('name')) problem = 'Укажите имя.';
-    else if (phoneDigits.length < 10) problem = 'Укажите телефон, чтобы курьер мог связаться с вами.';
-    else if (v('when') === 'time' && !v('time')) problem = 'Укажите время доставки.';
-    if (problem) {
-      err.textContent = problem;
-      err.hidden = false;
-      err.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      return;
-    }
+    err.textContent = text;
+    err.hidden = false;
+    err.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
 
-    const cust = { name: v('name'), phone: v('phone'), address: v('address'), flat: v('flat'), entrance: v('entrance'), floor: v('floor'), courier: v('courier') };
-    store.set('customer', cust);
-    renderAddressButton();
+  async function buildRoutes(from, to, seed) {
+    const route = from.coords && to.coords ? await DL.route(from.coords, to.coords) : null;
+    const startPt = from.coords ? DL.courierStart(from.coords, seed) : null;
+    const approach = startPt ? await DL.route(startPt, from.coords) : null;
+    return { route, approach };
+  }
+
+  async function submitOrder(e) {
+    e.preventDefault();
+    const form = e.target;
+    const f = new FormData(form);
+    const v = (k) => String(f.get(k) || '').trim();
+    const phoneDigits = v('phone').replace(/\D/g, '');
+    if (!state.address) return formError('Укажите адрес доставки.');
+    if (!v('name')) return formError('Укажите имя.');
+    if (phoneDigits.length < 10) return formError('Укажите телефон, чтобы курьер мог связаться с вами.');
+    if (v('when') === 'time' && !v('time')) return formError('Укажите время доставки.');
+
+    const btn = $('#submitOrder');
+    btn.disabled = true;
+    btn.firstElementChild.textContent = 'Оформляем…';
+    store.set('customer', { name: v('name'), phone: v('phone') });
 
     const place = placeById(state.cart.placeId);
-    const t = cartTotals();
+    const from = { label: place.name, sub: place.address || '', city: place.city, coords: place.coords || null };
+    const to = { ...state.address };
+    const createdAt = Date.now();
+    const { route, approach } = await buildRoutes(from, to, createdAt);
+    const priceD = route
+      ? DL.price('courier', route.distance, { outOfCity: !!(to.city && to.city !== place.city), door: state.door })
+      : { ride: COURIER.min, door: state.door ? COURIER.doorFee : 0, total: COURIER.min + (state.door ? COURIER.doorFee : 0), estimate: true };
+    const subtotal = cartTotals().subtotal;
     const order = {
-      id: 'o' + Date.now().toString(36),
-      number: String(Date.now()).slice(-5),
+      id: 'o' + createdAt.toString(36),
+      number: String(createdAt).slice(-5),
+      type: 'food',
+      tariff: 'courier',
       placeId: place.id,
       placeName: place.name,
       city: place.city,
       items: cartLines().map((l) => ({ name: l.item.name, price: l.item.price, unit: l.item.unit, qty: l.qty })),
-      subtotal: t.subtotal,
-      fee: t.fee,
-      total: t.total,
-      customer: cust,
-      geo: state.userPos,
-      when: v('when') === 'time' ? v('time') : 'Как можно скорее',
+      subtotal,
+      fee: priceD.total,
+      total: subtotal + priceD.total,
+      delivery: { price: priceD, door: state.door },
+      from, to, route, approach,
+      customer: { name: v('name'), phone: v('phone') },
+      scheduledAt: scheduledFrom(form),
       payment: v('payment'),
       comment: v('comment'),
-      createdAt: Date.now(),
+      createdAt,
       cancelled: false
     };
     state.orders.unshift(order);
@@ -914,75 +1201,361 @@
     state.cart = { placeId: null, items: {} };
     saveCart();
     location.hash = '#/orders/' + order.id;
-    toast(place.phones ? 'Заказ оформлен! Отправьте его заведению в WhatsApp, чтобы его приняли в работу.' : 'Заказ оформлен!');
   }
 
-  // ---------- Заказы ----------
-  // Пока нет сервера, статус меняется по времени — для демонстрации.
-  function orderStatus(o) {
-    if (o.cancelled) return { idx: -1, key: 'cancelled', label: 'Отменён' };
-    const min = (Date.now() - o.createdAt) / 60000;
-    const idx = min < 2 ? 0 : min < 20 ? 1 : min < 50 ? 2 : 3;
-    return { idx, ...STATUSES[idx] };
+  // ---------- Курьер и «Купим и привезём» ----------
+  const sendDraft = { from: null, to: null };
+
+  function renderSend(kind) {
+    const tariff = DL.TARIFFS[kind === 'buy' ? 'buy' : 'courier'];
+    const c = customer();
+    if (!sendDraft.to && state.address) sendDraft.to = { ...state.address };
+    $('#view').innerHTML = `
+      <div class="wrap page">
+        <a class="back" href="#/">← На главную</a>
+        <h1 class="page-title">${tariff.icon} ${esc(tariff.name)}</h1>
+        <div class="segmented" style="margin:-8px 0 20px" role="group" aria-label="Услуга">
+          <a class="seg-link" href="#/send/courier" aria-pressed="${kind !== 'buy'}">🛵 Отправить посылку</a>
+          <a class="seg-link" href="#/send/buy" aria-pressed="${kind === 'buy'}">🛍️ Купим и привезём</a>
+        </div>
+        <div class="checkout">
+          <form class="form" id="sendForm" novalidate>
+            <section class="block">
+              <h2>Маршрут</h2>
+              <div class="route-points">
+                <div class="route-point"><span class="dot dot-a">A</span><div style="flex:1">${addressCardHtml(sendDraft.from, kind === 'buy' ? 'Где купить?' : 'Откуда забрать?', 'data-pick-point="from"')}</div></div>
+                <div class="route-point"><span class="dot dot-b">B</span><div style="flex:1">${addressCardHtml(sendDraft.to, 'Куда привезти?', 'data-pick-point="to"')}</div></div>
+              </div>
+            </section>
+            <section class="block">
+              <h2>${kind === 'buy' ? 'Что купить' : 'Что везём'}</h2>
+              <div class="form">
+                <div class="field"><textarea name="what" aria-label="Описание" placeholder="${kind === 'buy' ? 'Например: 2 кг говядины на кости, лаваш, зелень' : 'Например: документы в конверте, небольшая коробка'}"></textarea></div>
+                ${kind === 'buy'
+                  ? '<div class="field"><label for="s-budget">Примерная сумма покупки, ₽</label><input id="s-budget" name="budget" inputmode="numeric" placeholder="Например, 1500"></div><p class="hint">Покупку оплачиваете курьеру при получении вместе с доставкой.</p>'
+                  : '<div class="field"><label for="s-rphone">Телефон получателя</label><input id="s-rphone" name="rphone" type="tel" placeholder="+7 900 000-00-00"></div>'}
+              </div>
+            </section>
+            <section class="block">
+              <h2>Тариф</h2>
+              <div id="sendQuote">${tariffCardHtml(tariff, null, 'Укажите обе точки — посчитаем по маршруту.')}</div>
+            </section>
+            <section class="block">
+              <h2>Когда</h2>
+              ${whenOptionsHtml('s')}
+            </section>
+            <section class="block">
+              <h2>Заказчик</h2>
+              <div class="row2">
+                <div class="field"><label for="s-name">Имя</label><input id="s-name" name="name" autocomplete="name" value="${esc(c.name || '')}"></div>
+                <div class="field"><label for="s-phone">Телефон</label><input id="s-phone" name="phone" type="tel" autocomplete="tel" placeholder="+7 900 000-00-00" value="${esc(c.phone || '')}"></div>
+              </div>
+            </section>
+            <section class="block">
+              <h2>Оплата</h2>
+              <div class="choice-grid">
+                ${Object.entries(PAYMENT).map(([k, v], i) => `<label class="choice"><input type="radio" name="payment" value="${k}" ${i === 0 ? 'checked' : ''}> ${v}</label>`).join('')}
+              </div>
+            </section>
+            <p class="hint warn" id="formError" hidden></p>
+          </form>
+          <aside class="cart-panel summary">
+            <div class="cart-head"><h2>Итого</h2></div>
+            <div id="sendTotal"></div>
+            <button class="btn btn-primary btn-block" type="submit" form="sendForm" id="sendSubmit"><span>Заказать</span><span class="btn-sum" id="sendSum"></span></button>
+            <p class="hint" style="margin-top:10px">${esc(tariff.about)}.</p>
+          </aside>
+        </div>
+      </div>`;
+    $('#view').dataset.kind = kind;
+    bindWhen('s');
+    $('#sendForm').addEventListener('submit', (e) => submitSend(e, kind));
+    updateSendQuote(kind);
+  }
+
+  async function sendQuote(kind) {
+    const { from, to } = sendDraft;
+    if (!from || !to || !from.coords || !to.coords) return null;
+    const r = await DL.route(from.coords, to.coords);
+    const outOfCity = !!(from.city && to.city && from.city !== to.city);
+    return { route: r, price: DL.price(kind === 'buy' ? 'buy' : 'courier', r.distance, { outOfCity, door: state.door }) };
+  }
+
+  async function updateSendQuote(kind) {
+    const tariff = DL.TARIFFS[kind === 'buy' ? 'buy' : 'courier'];
+    const q = await sendQuote(kind);
+    if (!$('#sendQuote')) return;
+    $('#sendQuote').innerHTML = tariffCardHtml(tariff, q, q ? '' : 'Укажите обе точки — посчитаем по маршруту.');
+    $('#sendTotal').innerHTML = q
+      ? `<div class="totals"><div><span>Доставка</span><span>${rub(q.price.total)}</span></div>${kind === 'buy' ? '<div><span>Покупка</span><span>по чеку</span></div>' : ''}</div>`
+      : `<p class="hint">Стоимость — от ${rub(tariff.min)}, ${tariff.perKmCity} ₽/км по городу.</p>`;
+    $('#sendSum').textContent = q ? rub(q.price.total) : '';
+  }
+
+  async function submitSend(e, kind) {
+    e.preventDefault();
+    const form = e.target;
+    const f = new FormData(form);
+    const v = (k) => String(f.get(k) || '').trim();
+    if (!sendDraft.from) return formError(kind === 'buy' ? 'Укажите, где купить.' : 'Укажите, откуда забрать.');
+    if (!sendDraft.to) return formError('Укажите, куда привезти.');
+    if (!v('what')) return formError(kind === 'buy' ? 'Напишите, что купить.' : 'Напишите, что везём.');
+    if (!v('name')) return formError('Укажите имя.');
+    if (v('phone').replace(/\D/g, '').length < 10) return formError('Укажите телефон.');
+    if (v('when') === 'time' && !v('time')) return formError('Укажите время.');
+    const btn = $('#sendSubmit');
+    btn.disabled = true;
+    btn.firstElementChild.textContent = 'Оформляем…';
+    store.set('customer', { name: v('name'), phone: v('phone') });
+    const createdAt = Date.now();
+    const from = { ...sendDraft.from };
+    const to = { ...sendDraft.to };
+    const { route, approach } = await buildRoutes(from, to, createdAt);
+    const tariffId = kind === 'buy' ? 'buy' : 'courier';
+    const t = DL.TARIFFS[tariffId];
+    const priceD = route
+      ? DL.price(tariffId, route.distance, { outOfCity: !!(from.city && to.city && from.city !== to.city), door: state.door })
+      : { ride: t.min, door: state.door ? t.doorFee : 0, total: t.min + (state.door ? t.doorFee : 0), estimate: true };
+    const order = {
+      id: 'o' + createdAt.toString(36),
+      number: String(createdAt).slice(-5),
+      type: tariffId,
+      tariff: tariffId,
+      city: from.city || state.city,
+      what: v('what'),
+      budget: v('budget'),
+      recipientPhone: v('rphone'),
+      items: [],
+      subtotal: 0,
+      fee: priceD.total,
+      total: priceD.total,
+      delivery: { price: priceD, door: state.door },
+      from, to, route, approach,
+      customer: { name: v('name'), phone: v('phone') },
+      scheduledAt: scheduledFrom(form),
+      payment: v('payment'),
+      comment: '',
+      createdAt,
+      cancelled: false
+    };
+    state.orders.unshift(order);
+    store.set('orders', state.orders);
+    sendDraft.from = null;
+    location.hash = '#/orders/' + order.id;
+  }
+
+  // ---------- Заказы и отслеживание ----------
+  // Старые заказы (до расчёта доставки по маршруту) приводим к новому виду.
+  function normalizeOrder(o) {
+    if (o.type) return o;
+    const place = placeById(o.placeId);
+    const c = o.customer || {};
+    return {
+      ...o,
+      type: 'food',
+      tariff: 'courier',
+      from: { label: o.placeName, sub: place ? place.address : '', city: o.city, coords: place && place.coords ? place.coords : null },
+      to: { label: c.address || 'Адрес не указан', city: o.city, coords: o.geo || null, flat: c.flat, entrance: c.entrance, floor: c.floor },
+      route: null,
+      approach: null,
+      delivery: { price: { total: o.fee || 0 }, door: false }
+    };
+  }
+  state.orders = state.orders.map(normalizeOrder);
+
+  function orderTitle(o) {
+    if (o.type === 'food') return o.placeName;
+    if (o.type === 'buy') return 'Купим и привезём';
+    return 'Курьер';
+  }
+
+  const fmtTime = (ms) => new Date(ms).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+
+  function etaText(pr, o) {
+    if (pr.stage === 'delivered' || pr.stage === 'cancelled') return '';
+    const left = Math.max(1, Math.round((pr.eta - Date.now()) / 60000));
+    if (pr.stage === 'scheduled') return `Доставим к ${fmtTime(o.scheduledAt)}`;
+    return `Приедет к ${fmtTime(pr.eta)} · через ${left} ${plural(left, 'минуту', 'минуты', 'минут')}`;
   }
 
   function orderText(o) {
     const lines = o.items.map((i) => `• ${i.name} × ${i.qty} = ${rub(i.price * i.qty)}`).join('\n');
+    const to = o.to || {};
+    const toLine = [to.label, to.flat && 'кв. ' + to.flat, to.entrance && 'подъезд ' + to.entrance, to.floor && 'этаж ' + to.floor, to.intercom && 'домофон ' + to.intercom].filter(Boolean).join(', ');
     return [
       `Заказ №${o.number} (Халяль Доставка)`,
       lines,
-      `Товары: ${rub(o.subtotal)}, доставка: ${o.fee ? rub(o.fee) : 'бесплатно'}`,
+      `Товары: ${rub(o.subtotal)}`,
+      `Доставка (курьер${o.route ? ', ' + fmtKm(o.route.distance) : ''}): ${rub(o.fee)}`,
       `Итого: ${rub(o.total)}`,
       `Имя: ${o.customer.name}`,
       `Телефон: ${o.customer.phone}`,
-      `Адрес: ${o.city}, ${addressLine(o.customer)}`,
-      o.customer.courier ? `Курьеру: ${o.customer.courier}` : '',
-      o.geo ? `Точка на карте 2ГИС: ${twoGisPointUrl(o.city, o.geo)}` : '',
-      `Когда: ${o.when}`,
+      `Адрес: ${to.city || o.city}, ${toLine}`,
+      to.courier ? `Курьеру: ${to.courier}` : '',
+      to.coords ? `Точка на карте 2ГИС: ${twoGisPointUrl(to.city || o.city, to.coords)}` : '',
+      `Когда: ${o.scheduledAt ? 'к ' + fmtTime(o.scheduledAt) : 'как можно скорее'}`,
       `Оплата: ${PAYMENT[o.payment]}`,
       o.comment ? `Комментарий: ${o.comment}` : ''
     ].filter(Boolean).join('\n');
   }
 
-  function orderCardHtml(o, focused) {
-    const s = orderStatus(o);
-    const place = placeById(o.placeId);
-    const phone = place && place.phones ? waPhone(place.phones[0]) : '';
+  const TRACK_STEPS = [
+    { stage: 'search', label: 'Поиск курьера' },
+    { stage: 'toPickup', label: 'Едет за заказом' },
+    { stage: 'atPickup', label: 'Забирает заказ' },
+    { stage: 'toClient', label: 'Везёт заказ' },
+    { stage: 'delivered', label: 'Доставлен' }
+  ];
+
+  function orderCardHtml(o) {
+    const pr = DL.progress(o);
     const date = new Date(o.createdAt).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
     return `
-      <article class="order-card${focused ? ' is-focused' : ''}">
+      <a class="order-card" href="#/orders/${esc(o.id)}">
         <div class="order-top">
           <div>
-            <h3>${esc(o.placeName)}</h3>
-            <div class="order-sub">Заказ №${esc(o.number)} · ${esc(date)} · ${rub(o.total)}</div>
+            <h3>${esc(orderTitle(o))}</h3>
+            <div class="order-sub">№${esc(o.number)} · ${esc(date)} · ${rub(o.total)}</div>
           </div>
-          <span class="status" data-s="${s.key}">${esc(s.label)}</span>
+          <span class="status" data-s="${pr.stage}">${pr.icon} ${esc(pr.label)}</span>
         </div>
-        ${s.idx >= 0 ? `
-          <div class="tracker">${STATUSES.map((x, i) => `
-            <div class="tracker-step${i <= s.idx ? ' on' : ''}"><span class="tracker-icon" aria-hidden="true">${x.icon}</span><i></i>${esc(x.label)}</div>`).join('')}
-          </div>` : ''}
-        <div class="order-items">${o.items.map((i) => `${esc(i.name)} × ${i.qty}`).join(', ')}</div>
-        <div class="order-items muted">${esc(o.city)}, ${esc(addressLine(o.customer))} · ${esc(o.when)} · ${esc(PAYMENT[o.payment])}</div>
-        <div class="order-actions">
-          ${phone ? `<a class="btn btn-primary" href="https://wa.me/${phone}?text=${encodeURIComponent(orderText(o))}" target="_blank" rel="noopener">Отправить заведению в WhatsApp</a>
-                     <a class="btn" href="tel:+${phone}">Позвонить</a>` : '<span class="hint">У заведения не указан телефон — уточните заказ по месту.</span>'}
-          <button class="btn" type="button" data-copy="${esc(o.id)}">Скопировать</button>
-          <button class="btn" type="button" data-repeat="${esc(o.id)}">Повторить</button>
-          ${!o.cancelled && s.idx < 2 ? `<button class="btn" type="button" data-cancel="${esc(o.id)}">Отменить</button>` : ''}
-        </div>
-      </article>`;
+        <div class="order-items muted">${esc((o.from && o.from.label) || '')} → ${esc((o.to && o.to.label) || '')}</div>
+        ${etaText(pr, o) ? `<div class="order-items">${esc(etaText(pr, o))}</div>` : ''}
+      </a>`;
   }
 
-  function renderOrders(focusId) {
+  function renderOrders() {
     $('#view').innerHTML = `
       <div class="wrap page">
         <h1 class="page-title">Мои заказы</h1>
         ${state.orders.length
-          ? `<div class="orders">${state.orders.map((o) => orderCardHtml(o, o.id === focusId)).join('')}</div>
-             <p class="hint" style="margin-top:16px;max-width:860px">Демо-режим: заказы хранятся в этом браузере, статусы меняются автоматически. После подключения сервера их будут обновлять заведение и курьер.</p>`
+          ? `<div class="orders">${state.orders.map(orderCardHtml).join('')}</div>`
           : '<div class="cart-empty"><span class="cart-empty-icon">🧾</span>Заказов пока нет. <a href="#/"><u>Выбрать заведение</u></a></div>'}
       </div>`;
+  }
+
+  let trackMap = null;
+  let trackTimer = null;
+  let trackStage = null;
+
+  function stopTracking() {
+    clearInterval(trackTimer);
+    trackTimer = null;
+    trackStage = null;
+    if (trackMap) { trackMap.destroy(); trackMap = null; }
+  }
+
+  function pointPin(letter, cls) {
+    return `<div class="route-pin ${cls}"><span>${letter}</span></div>`;
+  }
+
+  function trackPanelHtml(o, pr) {
+    const stepIdx = TRACK_STEPS.findIndex((s) => s.stage === pr.stage);
+    const place = o.type === 'food' ? placeById(o.placeId) : null;
+    const phone = place && place.phones ? waPhone(place.phones[0]) : '';
+    const p = (o.delivery && o.delivery.price) || { total: o.fee };
+    const tariff = DL.TARIFFS[o.tariff || 'courier'];
+    const canCancel = !o.cancelled && ['scheduled', 'search', 'toPickup', 'atPickup'].includes(pr.stage);
+    const shareUrl = location.href;
+    return `
+      <a class="back" href="#/orders">← Мои заказы</a>
+      <div class="track-head">
+        <span class="track-icon" aria-hidden="true">${pr.icon}</span>
+        <div>
+          <h1>${esc(pr.label)}</h1>
+          <p class="muted" id="trackEta">${esc(etaText(pr, o))}</p>
+        </div>
+      </div>
+      ${pr.stage === 'search' ? '<div class="searching"><i></i><i></i><i></i></div>' : ''}
+      ${stepIdx >= 0 ? `<ol class="steps-v">${TRACK_STEPS.map((s, i) => `<li class="${i < stepIdx ? 'done' : i === stepIdx ? 'now' : ''}">${esc(s.label)}</li>`).join('')}</ol>` : ''}
+      ${['toPickup', 'atPickup', 'toClient'].includes(pr.stage) ? `
+        <div class="courier-card">
+          <span class="courier-ava" aria-hidden="true">🛵</span>
+          <div><b>Курьер назначен</b><small>Демо-режим: пока нет приложения для курьеров, его движение показывает сайт</small></div>
+        </div>` : ''}
+      <div class="track-block">
+        <div class="route-points">
+          <div class="route-point"><span class="dot dot-a">A</span><div><b>${esc(o.from.label)}</b><small>${esc(o.from.sub || o.from.city || '')}</small></div></div>
+          <div class="route-point"><span class="dot dot-b">B</span><div><b>${esc(o.to.label)}</b><small>${esc([o.to.flat && 'кв. ' + o.to.flat, o.to.entrance && 'подъезд ' + o.to.entrance, o.to.floor && 'этаж ' + o.to.floor].filter(Boolean).join(', ') || o.to.city || '')}</small></div></div>
+        </div>
+        ${o.what ? `<p class="order-items"><b>${o.type === 'buy' ? 'Купить' : 'Везём'}:</b> ${esc(o.what)}${o.budget ? ` · до ${esc(o.budget)} ₽` : ''}</p>` : ''}
+        ${o.items.length ? `<p class="order-items">${o.items.map((i) => `${esc(i.name)} × ${i.qty}`).join(', ')}</p>` : ''}
+      </div>
+      <div class="totals">
+        ${o.subtotal ? `<div><span>Товары</span><span>${rub(o.subtotal)}</span></div>` : ''}
+        <div><span>${esc(tariff.name)}${o.route ? ' · ' + fmtKm(o.route.distance) : ''}</span><span>${rub(p.total - (p.door || 0))}</span></div>
+        ${p.door ? `<div><span>Курьер к двери</span><span>${rub(p.door)}</span></div>` : ''}
+        ${o.type === 'buy' ? '<div><span>Покупка</span><span>по чеку</span></div>' : ''}
+        <div class="total"><span>Итого</span><span>${rub(o.total)}</span></div>
+        <div class="muted" style="font-size:13px">${esc(PAYMENT[o.payment] || '')}</div>
+      </div>
+      <div class="order-actions">
+        ${o.type === 'food' && phone && !o.cancelled ? `<a class="btn btn-primary" href="https://wa.me/${phone}?text=${encodeURIComponent(orderText(o))}" target="_blank" rel="noopener">Отправить заказ заведению</a>` : ''}
+        <button class="btn" type="button" data-share="${esc(shareUrl)}">Поделиться</button>
+        ${canCancel ? `<button class="btn" type="button" data-cancel="${esc(o.id)}">Отменить</button>` : ''}
+        ${o.type === 'food' ? `<button class="btn" type="button" data-repeat="${esc(o.id)}">Повторить</button>` : ''}
+      </div>
+      ${pr.stage === 'delivered' ? ratingHtml(o) : ''}
+      <p class="hint" style="margin-top:14px">№${esc(o.number)} · Работаем круглосуточно.</p>`;
+  }
+
+  function ratingHtml(o) {
+    const r = o.rating;
+    if (r && r.saved) {
+      return `<div class="rating"><b>Ваша оценка</b><div class="stars">${[1, 2, 3, 4, 5].map((n) => `<span class="${n <= r.stars ? 'on' : ''}">★</span>`).join('')}</div>${r.comment ? `<p class="muted">${esc(r.comment)}</p>` : ''}</div>`;
+    }
+    const s = (r && r.stars) || 0;
+    return `<div class="rating" id="ratingBox"><b>Как прошла доставка?</b>
+      <div class="stars" role="group" aria-label="Оценка">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="${n <= s ? 'on' : ''}" data-star="${n}" aria-label="${n} из 5">★</button>`).join('')}</div>
+      <textarea id="rateComment" placeholder="Комментарий курьеру (необязательно)"></textarea>
+      <button class="btn btn-primary" type="button" data-rate="${esc(o.id)}">Отправить оценку</button></div>`;
+  }
+
+  function updateTrackMap(o, pr) {
+    if (!trackMap) return;
+    if (pr.courier) trackMap.setMarker('courier', pr.courier, '<div class="courier-pin">🛵</div>', [18, 18]);
+    else trackMap.removeMarker('courier');
+  }
+
+  function renderTracking(id) {
+    const o = state.orders.find((x) => x.id === id);
+    if (!o) { $('#view').innerHTML = '<div class="wrap page"><p class="empty">Заказ не найден. <a href="#/orders"><u>Мои заказы</u></a></p></div>'; return; }
+    const hasMap = (o.from && o.from.coords) || (o.to && o.to.coords);
+    $('#view').innerHTML = `
+      <div class="track">
+        ${hasMap ? '<div class="track-map"><div class="map" id="trackMap"></div></div>' : ''}
+        <aside class="track-panel${hasMap ? '' : ' no-map'}" id="trackPanel"></aside>
+      </div>`;
+    const draw = () => {
+      const pr = DL.progress(o);
+      if (pr.stage !== trackStage) {
+        trackStage = pr.stage;
+        $('#trackPanel').innerHTML = trackPanelHtml(o, pr);
+      } else {
+        const eta = $('#trackEta');
+        if (eta) eta.textContent = etaText(pr, o);
+      }
+      updateTrackMap(o, pr);
+    };
+    draw();
+    trackTimer = setInterval(() => {
+      if (!document.body.contains($('#trackPanel'))) { stopTracking(); return; }
+      draw();
+    }, 1000);
+    if (!hasMap) return;
+    const center = (o.to && o.to.coords) || o.from.coords;
+    window.DostavkaMap.create($('#trackMap'), { center, pinHtml: () => '', popupHtml: () => '', onSelect: () => {} }).then((m) => {
+      if (!document.body.contains($('#trackMap'))) { m.destroy(); return; }
+      trackMap = m;
+      const pts = [];
+      if (o.from.coords) { m.setMarker('from', o.from.coords, pointPin('A', 'pin-a')); pts.push(o.from.coords); }
+      if (o.to.coords) { m.setMarker('to', o.to.coords, pointPin('B', 'pin-b')); pts.push(o.to.coords); }
+      if (o.route) m.setRoute(o.route.path);
+      const pr0 = DL.progress(o);
+      if (pr0.courier) pts.push(pr0.courier);
+      m.fitTo(pts.length ? pts : [center]);
+      updateTrackMap(o, pr0);
+    });
   }
 
   function repeatOrder(id) {
@@ -1008,20 +1581,27 @@
     openCart(false);
     $$('dialog[open]').forEach((d) => d.close());
     if (spy) { spy.disconnect(); spy = null; }
+    stopTracking();
     const parts = hash.replace(/^#\/?/, '').split('/');
     if (parts[0] !== '') destroyMap();
+    delete $('#view').dataset.kind;
     if (parts[0] === 'place' && parts[1]) {
       const p = placeById(decodeURIComponent(parts[1]));
       if (p && p.city !== state.city) { state.city = p.city; store.set('city', p.city); renderAddressButton(); }
       renderPlace(decodeURIComponent(parts[1]));
     } else if (parts[0] === 'checkout') {
       renderCheckout();
+    } else if (parts[0] === 'orders' && parts[1]) {
+      renderTracking(parts[1]);
     } else if (parts[0] === 'orders') {
-      renderOrders(parts[1]);
+      renderOrders();
+    } else if (parts[0] === 'send') {
+      renderSend(parts[1] === 'buy' ? 'buy' : 'courier');
     } else {
       renderHome();
     }
     renderCartIndicators();
+    ensureQuote();
     window.scrollTo(0, 0);
   }
 
@@ -1034,6 +1614,21 @@
     if (d.dec) { changeQty(d.place, d.dec, -1); return; }
     if ('clearCart' in d) { clearCart(); return; }
     if ('closeModal' in d) { t.closest('dialog').close(); return; }
+    if ('pickAddress' in d) { openAddressModal(); return; }
+    if (d.pickPoint) {
+      const kind = $('#view').dataset.kind;
+      picker.open({
+        title: d.pickPoint === 'from' ? (kind === 'buy' ? 'Где купить?' : 'Откуда забрать?') : 'Куда привезти?',
+        value: sendDraft[d.pickPoint],
+        details: true,
+        onDone: (addr) => {
+          sendDraft[d.pickPoint] = addr;
+          if (d.pickPoint === 'to') setAddress(addr);
+          renderSend(kind);
+        }
+      });
+      return;
+    }
     if (d.city) { setCity(d.city); return; }
     if (d.info) { openInfo(d.info); return; }
     if (d.dish) { openDish(d.place, d.dish); return; }
@@ -1051,23 +1646,51 @@
     }
     if (d.jump) { e.preventDefault(); jumpToSection(d.jump); return; }
     if (d.placeRow && !e.target.closest('a')) { highlight(d.placeRow, true); return; }
-    if (d.copy) {
-      const o = state.orders.find((x) => x.id === d.copy);
-      navigator.clipboard.writeText(orderText(o)).then(() => toast('Заказ скопирован'), () => toast('Не удалось скопировать'));
+    if (d.share) {
+      const url = d.share;
+      if (navigator.share) navigator.share({ title: 'Отслеживание заказа', url }).catch(() => {});
+      else navigator.clipboard.writeText(url).then(() => toast('Ссылка скопирована'), () => toast(url));
       return;
     }
     if (d.cancel) {
-      if (!confirm('Отменить заказ? Если вы уже отправили его заведению, сообщите им об отмене.')) return;
+      if (!confirm('Отменить заказ?')) return;
       const o = state.orders.find((x) => x.id === d.cancel);
       o.cancelled = true;
       store.set('orders', state.orders);
-      renderOrders();
+      trackStage = null;
+      return;
+    }
+    if (d.star) {
+      const n = +d.star;
+      $$('#ratingBox [data-star]').forEach((b) => b.classList.toggle('on', +b.dataset.star <= n));
+      $('#ratingBox').dataset.stars = n;
+      return;
+    }
+    if (d.rate) {
+      const stars = +($('#ratingBox').dataset.stars || 0);
+      if (!stars) { toast('Поставьте оценку'); return; }
+      const o = state.orders.find((x) => x.id === d.rate);
+      o.rating = { stars, comment: $('#rateComment').value.trim(), saved: true };
+      store.set('orders', state.orders);
+      trackStage = null;
+      toast('Спасибо за оценку!');
       return;
     }
     if (d.repeat) { repeatOrder(d.repeat); return; }
     if (t.id === 'nearMe') {
       if (state.userPos) { state.userPos = null; t.setAttribute('aria-pressed', 'false'); renderResults(); return; }
       locateUser(() => { t.setAttribute('aria-pressed', 'true'); renderResults(); });
+    }
+  });
+
+  document.addEventListener('change', (e) => {
+    if (e.target.id === 'doorOpt') {
+      state.door = e.target.checked;
+      store.set('door', state.door);
+      if ($('#view').dataset.kind) { updateSendQuote($('#view').dataset.kind); return; }
+      renderCartIndicators();
+      refreshAfterCartChange(null, null);
+      ensureQuote();
     }
   });
 
@@ -1096,17 +1719,6 @@
   // Закрытие окон по клику на затемнение.
   $$('dialog').forEach((dlg) => dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); }));
 
-  $('#addressForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const f = e.target;
-    const c = { ...customer(), address: f.address.value.trim(), flat: f.flat.value.trim(), entrance: f.entrance.value.trim(), floor: f.floor.value.trim() };
-    store.set('customer', c);
-    renderAddressButton();
-    $('#addressModal').close();
-    if (!state.city) { toast('Выберите город'); openAddressModal(); return; }
-    toast(c.address ? 'Адрес сохранён' : 'Город выбран');
-  });
-
   $('#cartButton').addEventListener('click', () => openCart(true));
   $('#cartBar').addEventListener('click', () => openCart(true));
   $('#cartClose').addEventListener('click', () => openCart(false));
@@ -1114,9 +1726,9 @@
   $('#addressButton').addEventListener('click', openAddressModal);
   window.addEventListener('hashchange', route);
 
-  // Обновляем статусы заказов раз в 30 секунд, пока открыт экран заказов.
+  // Список заказов обновляем раз в 30 секунд, пока он открыт.
   setInterval(() => {
-    if (location.hash.startsWith('#/orders')) renderOrders(location.hash.split('/')[2]);
+    if (location.hash === '#/orders') renderOrders();
   }, 30000);
 
   renderAddressButton();

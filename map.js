@@ -6,6 +6,11 @@
 //   setActive(id)                        — подсветить метку
 //   focus(id)                            — приблизить к заведению и открыть подсказку
 //   resize()                             — пересчитать размер после показа контейнера
+//   setMarker(id, coords, html, anchor)  — поставить или передвинуть свою метку (точки доставки, курьер)
+//   removeMarker(id)
+//   setRoute(path)                       — нарисовать маршрут [[lat, lon], ...]; null — убрать
+//   fitTo(points)                        — вписать точки в экран
+//   getCenter() → [lat, lon]; setView(coords, zoom); onMoveEnd(cb) — для выбора точки пином
 //   destroy()
 // options: { center: [lat, lon], pinHtml(place, active), popupHtml(place), onSelect(id) }
 // Координаты везде [lat, lon], как в data/places.js; MapGL ждёт [lon, lat] — переворачиваем внутри.
@@ -69,6 +74,8 @@
     }
 
     map.on('click', closePopup);
+    const extra = {};
+    let route = null;
 
     function fit(points) {
       if (points.length === 1) {
@@ -132,7 +139,23 @@
         openPopup(p);
       },
       resize() { map.invalidateSize(); },
-      destroy() { closePopup(); map.destroy(); }
+      setMarker(id, coords, html, anchor) {
+        if (extra[id] && extra[id].html === html) { extra[id].m.setCoordinates(toLonLat(coords)); return; }
+        if (extra[id]) extra[id].m.destroy();
+        extra[id] = { html, m: new mapgl.HtmlMarker(map, { coordinates: toLonLat(coords), html, anchor: anchor || [15, 30], zIndex: id === 'courier' ? 900 : 500 }) };
+      },
+      removeMarker(id) { if (extra[id]) { extra[id].m.destroy(); delete extra[id]; } },
+      setRoute(path) {
+        if (route) { route.destroy(); route = null; }
+        if (path && path.length > 1) {
+          route = new mapgl.Polyline(map, { coordinates: path.map(toLonLat), width: 6, color: '#8a1538' });
+        }
+      },
+      fitTo(points) { fit(points); },
+      getCenter() { const c = map.getCenter(); return [c[1], c[0]]; },
+      setView(coords, zoom) { map.setCenter(toLonLat(coords)); if (zoom) map.setZoom(zoom); },
+      onMoveEnd(cb) { map.on('moveend', () => cb(this.getCenter())); },
+      destroy() { closePopup(); Object.values(extra).forEach((x) => x.m.destroy()); if (route) route.destroy(); map.destroy(); }
     };
   }
 
@@ -160,6 +183,8 @@
     let markers = {};
     let userMarker = null;
     let placesById = {};
+    const extra = {};
+    let route = null;
 
     // Если сервер тайлов недоступен, переключаемся на следующий.
     (function addTiles(index) {
@@ -222,6 +247,25 @@
         m.openPopup();
       },
       resize() { map.invalidateSize(); },
+      setMarker(id, coords, html, anchor) {
+        const a = anchor || [15, 30];
+        if (extra[id] && extra[id].html === html) { extra[id].m.setLatLng(coords); return; }
+        if (extra[id]) extra[id].m.remove();
+        const ic = L.divIcon({ className: '', html, iconSize: [a[0] * 2, a[1] * 2], iconAnchor: a });
+        extra[id] = { html, m: L.marker(coords, { icon: ic, zIndexOffset: id === 'courier' ? 900 : 500, interactive: false }).addTo(map) };
+      },
+      removeMarker(id) { if (extra[id]) { extra[id].m.remove(); delete extra[id]; } },
+      setRoute(path) {
+        if (route) { route.remove(); route = null; }
+        if (path && path.length > 1) route = L.polyline(path, { color: '#8a1538', weight: 6, opacity: 0.9 }).addTo(map);
+      },
+      fitTo(points) {
+        if (points.length > 1) map.fitBounds(points, { padding: [FIT_PADDING, FIT_PADDING], maxZoom: MAX_FIT_ZOOM });
+        else if (points.length === 1) map.setView(points[0], MAX_FIT_ZOOM);
+      },
+      getCenter() { const c = map.getCenter(); return [c.lat, c.lng]; },
+      setView(coords, zoom) { map.setView(coords, zoom || map.getZoom()); },
+      onMoveEnd(cb) { map.on('moveend', () => cb(this.getCenter())); },
       destroy() { map.remove(); }
     };
   }
