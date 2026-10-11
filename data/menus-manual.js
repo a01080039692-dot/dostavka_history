@@ -145,7 +145,7 @@
       "items": [
         {
           "id": "croissant-salmon",
-          "photo": "assets/dishes/haba/croissant-salmon.jpg?v=4",
+          "photo": "assets/dishes/haba/croissant-salmon.jpg?v=5",
           "name": "Круассан с сёмгой",
           "desc": "",
           "price": 300,
@@ -153,7 +153,7 @@
         },
         {
           "id": "croissant-chicken",
-          "photo": "assets/dishes/haba/croissant-chicken.jpg?v=4",
+          "photo": "assets/dishes/haba/croissant-chicken.jpg?v=5",
           "name": "Круассан с курицей су-вид",
           "desc": "",
           "price": 250,
