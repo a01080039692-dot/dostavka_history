@@ -1383,7 +1383,7 @@
     const to = o.to || {};
     const toLine = [to.label, to.flat && 'кв. ' + to.flat, to.entrance && 'подъезд ' + to.entrance, to.floor && 'этаж ' + to.floor, to.intercom && 'домофон ' + to.intercom].filter(Boolean).join(', ');
     return [
-      `Заказ №${o.number} (Халяль Доставка)`,
+      `Заказ №${o.number} (Доставка History)`,
       lines,
       `Товары: ${rub(o.subtotal)}`,
       `Доставка (курьер${o.route ? ', ' + fmtKm(o.route.distance) : ''}): ${rub(o.fee)}`,

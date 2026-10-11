@@ -1,4 +1,4 @@
-# Халяль Доставка
+# Доставка History
 
 Сервис доставки еды и продуктов из халяль-заведений. Основан на каталоге [Halal Tracker](https://halaltracker.zaganoid8.chatgpt.site/tracker/).
 
