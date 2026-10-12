@@ -860,9 +860,12 @@ a.order-card:hover { box-shadow: 0 0 0 2px var(--surface-2); }
   .cat { width: 96px; font-size: 13px; padding: 12px 6px 10px; }
   .cat-icon { font-size: 28px; }
   .bar h2 { font-size: 22px; width: 100%; }
-  .bar-controls { width: 100%; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; width: calc(100% + 32px); }
-  .bar-controls::-webkit-scrollbar { display: none; }
-  .bar-controls > * { flex: none; }
+  /* Город — первой строкой, под ним «Списком / На карте» и «Рядом со мной»: всё видно без прокрутки вбок. */
+  .bar-controls { width: 100%; flex-wrap: wrap; gap: 8px; }
+  .bar-controls .city-switch { order: 1; width: 100%; }
+  .bar-controls .view-switch { order: 2; flex: 1 1 0; min-width: 0; }
+  .bar-controls #nearMe { order: 3; flex: none; }
+  .bar-controls .segmented button { flex: 1; padding: 0 8px; }
   .grid { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .place-hero { min-height: 220px; border-radius: 0; margin: -20px -16px 0; }
   .hero-content { padding: 36px 16px 20px; flex-direction: column; align-items: flex-start; }

@@ -580,11 +580,11 @@
         <div class="bar">
           <h2 id="listTitle"></h2>
           <div class="bar-controls">
-          <div class="segmented tabs" role="group" aria-label="Город">
+          <div class="segmented tabs city-switch" role="group" aria-label="Город">
             ${cityNames().map((c) => `<button type="button" data-city="${esc(c)}" aria-pressed="${c === state.city}">${esc(c)}</button>`).join('')}
           </div>
           <button class="pill" type="button" id="nearMe" aria-pressed="${!!state.userPos}">📍 Рядом со мной</button>
-          <div class="segmented" role="group" aria-label="Вид">
+          <div class="segmented view-switch" role="group" aria-label="Вид">
             <button type="button" data-view="grid" aria-pressed="${state.view === 'grid'}">Списком</button>
             <button type="button" data-view="map" aria-pressed="${state.view === 'map'}">На карте</button>
           </div>
