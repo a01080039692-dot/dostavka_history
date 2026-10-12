@@ -415,6 +415,8 @@ img { max-width: 100%; }
 }
 button.hero-chip:hover { background: rgba(255,255,255,.28); }
 .source-note { margin: 14px 4px 0; font-size: 13px; color: var(--muted); }
+.no-menu { margin-top: 20px; max-width: 720px; }
+.no-menu p { margin-bottom: 4px; }
 
 .place-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr) 360px; gap: 32px; margin-top: 28px; align-items: start; }
 .menu-nav { position: sticky; top: calc(var(--header-h) + 20px); display: flex; flex-direction: column; gap: 2px; }

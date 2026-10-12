@@ -78,7 +78,8 @@
 
   // Сохранённые город и корзина могли остаться от города, который отключили.
   if (!ACTIVE_CITIES.includes(state.city)) state.city = ACTIVE_CITIES.length === 1 ? ACTIVE_CITIES[0] : null;
-  if (state.cart.placeId && !DATA.places.some((p) => p.id === state.cart.placeId)) {
+  // Корзина могла остаться от заведения, у которого убрали меню.
+  if (state.cart.placeId && !(DATA.places.some((p) => p.id === state.cart.placeId) && MENUS.byPlace[state.cart.placeId])) {
     state.cart = { placeId: null, items: {} };
     store.set('cart', state.cart);
   }
@@ -169,7 +170,7 @@
   }
 
   function menuFor(place) {
-    return MENUS.byPlace[place.id] || MENUS.byCategory[place.categories[0]] || MENUS.byCategory.restaurant;
+    return MENUS.byPlace[place.id] || [];
   }
 
   function findItem(place, itemId) {
@@ -541,7 +542,7 @@
         <div>
           <h3>${esc(p.name)}</h3>
           <div class="card-meta">${placeMeta(p)}</div>
-          <a class="go" href="#/place/${esc(p.id)}">Открыть меню →</a>
+          <a class="go" href="#/place/${esc(p.id)}">${MENUS.byPlace[p.id] ? 'Открыть меню' : 'Подробнее'} →</a>
         </div>
       </div>`;
   }
@@ -647,7 +648,7 @@
   function popupHtml(p) {
     const route = twoGisRouteUrl(p);
     return `<b>${esc(p.name)}</b><br>${esc(p.address || '')}<br>
-      <a class="popup-btn" href="#/place/${esc(p.id)}">Открыть меню</a>
+      <a class="popup-btn" href="#/place/${esc(p.id)}">${MENUS.byPlace[p.id] ? 'Открыть меню' : 'Подробнее'}</a>
       ${route ? `<a class="popup-link" href="${esc(route)}" target="_blank" rel="noopener">Маршрут в 2ГИС</a>` : ''}`;
   }
 
@@ -705,16 +706,29 @@
       </section>`).join('');
   }
 
+  // Заведение без меню: заказать на сайте нельзя, но можно связаться с ним или вызвать «Купим и привезём».
+  function noMenuHtml(p) {
+    const phone = p.phones && p.phones[0];
+    return `
+      <section class="block no-menu">
+        <h2>Меню пока нет</h2>
+        <p class="muted">Заведение ещё не добавило меню, поэтому заказать здесь нельзя. Узнайте ассортимент у заведения или попросите курьера купить и привезти.</p>
+        <div class="order-actions">
+          <a class="btn btn-primary" href="#/send/buy">🛍️ Купим и привезём</a>
+          ${phone ? `<a class="btn" href="tel:+${esc(waPhone(phone))}">Позвонить</a>
+          <a class="btn" href="https://wa.me/${esc(waPhone(phone))}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
+        </div>
+      </section>`;
+  }
+
   function renderPlace(id) {
     const p = placeById(id);
     if (!p) { $('#view').innerHTML = '<div class="wrap page"><p class="empty">Заведение не найдено. <a href="#/"><u>К списку</u></a></p></div>'; return; }
     state.menuQuery = '';
     const menu = menuFor(p);
-    const isDemo = !MENUS.byPlace[p.id];
+    const hasMenu = menu.length > 0;
     const source = (MENUS.sources || {})[p.id];
-    const note = isDemo
-      ? 'Меню демонстрационное: цены и позиции уточняются у заведения.'
-      : source ? (source.text || `Меню и цены — с сервиса ${source.name} на ${source.date}. В заведении цены могут отличаться.`) : '';
+    const note = source ? (source.text || `Меню и цены — с сервиса ${source.name} на ${source.date}. В заведении цены могут отличаться.`) : '';
     $('#view').innerHTML = `
       <div class="wrap place">
         <section class="place-hero">
@@ -726,7 +740,7 @@
               ${p.description ? `<p>${esc(p.description)}</p>` : ''}
               <div class="hero-chips">
                 <span class="hero-chip">🛵 Курьер от ${rub(COURIER.min)} · ${COURIER.perKmCity} ₽/км</span>
-                <span class="hero-chip">Заказ от ${rub(DELIVERY.minOrder)}</span>
+                ${hasMenu ? `<span class="hero-chip">Заказ от ${rub(DELIVERY.minOrder)}</span>` : ''}
                 ${p.workingHours ? `<span class="hero-chip">🕒 ${esc(p.workingHours)}</span>` : ''}
                 ${p.verified ? '<span class="hero-chip">✓ Проверено</span>' : ''}
                 <button class="hero-chip" type="button" data-info="${esc(p.id)}">ⓘ Информация</button>
@@ -735,7 +749,7 @@
           </div>
         </section>
         ${note ? `<p class="source-note">${esc(note)}</p>` : ''}
-        <div class="place-layout">
+        ${hasMenu ? `<div class="place-layout">
           <nav class="menu-nav" id="menuNav" aria-label="Разделы меню">
             ${menu.map((s, i) => `<a href="#" data-jump="sec-${i}">${esc(s.section)}</a>`).join('')}
           </nav>
@@ -746,7 +760,7 @@
             <div id="menuSections">${menuSectionsHtml(p)}</div>
           </div>
           <aside class="cart-panel" id="cartPanel">${cartHtml('panel')}</aside>
-        </div>
+        </div>` : noMenuHtml(p)}
       </div>`;
     $('#view').dataset.place = p.id;
     setupScrollSpy();
