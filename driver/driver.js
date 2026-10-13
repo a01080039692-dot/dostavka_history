@@ -20,6 +20,12 @@
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[c]));
   }
+  // Опции, которые заказал клиент: курьер заходит за отправлением и/или отдаёт в руки.
+  function exitText(o) {
+    const p = (o.delivery && o.delivery.price) || {};
+    return [p.exitPick && 'выйти, забрать', p.exitDrop && 'выйти, отдать'].filter(Boolean).join(', ');
+  }
+
   const rub = (n) => Math.round(n).toLocaleString('ru-RU') + ' ₽';
   const fmtKm = (m) => (m / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' км';
   const fmtMin = (s) => Math.max(1, Math.round(s / 60)) + ' мин';
@@ -337,6 +343,7 @@
         ${toLine ? `<p><b>Адрес:</b> ${esc(to.label)}, ${esc(toLine)}</p>` : ''}
         ${to.courier ? `<p><b>Курьеру:</b> ${esc(to.courier)}</p>` : ''}
         ${o.comment ? `<p><b>Комментарий:</b> ${esc(o.comment)}</p>` : ''}
+        ${exitText(o) ? `<p><b>Опции:</b> ${esc(exitText(o))}</p>` : ''}
         <p><b>Клиент:</b> ${esc(o.customer.name)}, ${esc(o.customer.phone)}${o.recipientPhone ? ` · получатель ${esc(o.recipientPhone)}` : ''}</p>
         <div class="order-actions">
           <a class="btn" href="tel:+${esc(digits(o.customer.phone))}">📞 Клиенту</a>

@@ -29,6 +29,8 @@
       perKmIntercity: 33,   // между городами: точки A и B в разных городах (Махачкала ↔ Каспийск)
       freeKmh: 30,          // средняя скорость по городу без пробок
       jamPerMin: 7,         // надбавка за минуту, потерянную в пробках
+      exitPickFee: 50,      // «Выйти, забрать» — курьер зайдёт за отправлением в точке A
+      exitDropFee: 50,      // «Выйти, отдать» — курьер поднимется и отдаст в точке B
       freeWaitMin: 3,
       waitPerMin: 7
     }
@@ -37,7 +39,7 @@
   TARIFFS.buy = TARIFFS.courier;
 
   // Стоимость: километры по городской или междугородней ставке, но не меньше минимума,
-  // плюс надбавка за пробки; округление до ближайших 10 ₽.
+  // плюс надбавка за пробки; округление до ближайших 10 ₽. Опции «Выйти, забрать» и «Выйти, отдать» — сверху.
   function price(tariffId, distanceM, opts) {
     const t = TARIFFS[tariffId];
     const km = Math.max(0, distanceM) / 1000;
@@ -49,11 +51,26 @@
     const jamMin = Math.max(0, Math.floor(lost));
     const jam = jamMin * t.jamPerMin;
     const ride = Math.round((kmPart + jam) / 10) * 10;
+    const ex = extras(t, opts);
     return {
-      ride, door: 0, total: ride,
+      ride, ...ex, total: ride + ex.door,
       kmPart: Math.round(kmPart), byMin: km * rate < t.min, jam, jamMin, jamSource: fromYandex ? 'yandex' : '2gis',
       km: Math.round(km * 10) / 10, minutes: Math.round(minutes), rate, intercity: !!(opts && opts.intercity)
     };
+  }
+
+  // Опции курьера. door — их сумма (так же называлась плата за выход к двери в старых заказах).
+  function extras(t, opts) {
+    const exitPick = opts && opts.exitPick ? t.exitPickFee : 0;
+    const exitDrop = opts && opts.exitDrop ? t.exitDropFee : 0;
+    return { exitPick, exitDrop, door: exitPick + exitDrop };
+  }
+
+  // Цена, когда маршрут посчитать нельзя: минимум плюс опции.
+  function minPrice(tariffId, opts) {
+    const t = TARIFFS[tariffId];
+    const ex = extras(t, opts);
+    return { ride: t.min, ...ex, total: t.min + ex.door, estimate: true };
   }
 
   // Между городами — когда у точек указаны разные города (Махачкала ↔ Каспийск).
@@ -350,7 +367,7 @@
   }
 
   window.DostavkaDelivery = {
-    TARIFFS, STAGES, price, isIntercity, suggest, reverse, route, pointAt, courierStart, timeline, progress, progressLive,
+    TARIFFS, STAGES, price, minPrice, isIntercity, suggest, reverse, route, pointAt, courierStart, timeline, progress, progressLive,
     haversine, savedAddresses: loadSaved, rememberAddress,
     forgetAddress(i) { const l = loadSaved(); l.splice(i, 1); saveSaved(l); },
     hasGeo: () => !!KEY
