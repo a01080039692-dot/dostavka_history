@@ -845,7 +845,7 @@
         <div class="info-row"><span>📍</span><span>${esc(p.city)}, ${esc(p.address || 'адрес уточняется')}</span></div>
         ${p.workingHours ? `<div class="info-row"><span>🕒</span><span>${esc(p.workingHours)}</span></div>` : ''}
         ${phones ? `<div class="info-row"><span>☎</span><span>${phones}</span></div>` : ''}
-        <div class="info-row"><span>🛵</span><span>Доставка по тарифу «Курьер»: подача ${rub(COURIER.base)} + ${COURIER.perKm} ₽/км + ${COURIER.perMin} ₽/мин в пути, в пробках дороже. Курьер поднимется к двери — ${rub(COURIER.doorFee)}. Минимальный заказ — ${rub(DELIVERY.minOrder)}.</span></div>
+        <div class="info-row"><span>🛵</span><span>Доставка по тарифу «Курьер»: подача ${rub(COURIER.base)} + ${COURIER.perKm} ₽/км. Курьер поднимется к двери — ${rub(COURIER.doorFee)}. Минимальный заказ — ${rub(DELIVERY.minOrder)}.</span></div>
         ${links ? `<div class="info-links">${links}</div>` : ''}
       </div>`;
     $('#infoModal').showModal();
@@ -1164,7 +1164,7 @@
         <b class="tariff-price">${p ? rub(p.total) : 'от ' + rub(tariff.min)}</b>
       </div>
       ${p ? `<div class="breakdown">
-        <div><span>Подача ${rub(p.base)} + ${fmtKm(q.route.distance)} × ${tariff.perKm} ₽ + ${p.minutes} мин × ${tariff.perMin} ₽${q.route.source === 'estimate' ? '' : ' (с учётом пробок)'}</span><span>${rub(p.ride)}</span></div>
+        <div><span>Подача ${rub(p.base)} + ${fmtKm(q.route.distance)} × ${tariff.perKm} ₽${tariff.perMin ? ` + ${p.minutes} мин × ${tariff.perMin} ₽` : ''}</span><span>${rub(p.ride)}</span></div>
         ${p.door ? `<div><span>Выход курьера к двери</span><span>${rub(p.door)}</span></div>` : ''}
       </div>` : ''}
       <label class="check"><input type="checkbox" id="doorOpt" ${state.door ? 'checked' : ''}> Курьер поднимется к двери <span class="muted">+${rub(tariff.doorFee)}</span></label>
