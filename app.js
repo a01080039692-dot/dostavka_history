@@ -342,6 +342,7 @@
     return item.photo ? `<img src="${esc(item.photo)}" alt="" loading="lazy">` : '🍽';
   }
 
+  const fmtRate = (n) => n.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
   const fmtKm = (m) => (m / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' км';
   const fmtMin = (s) => Math.max(1, Math.round(s / 60)) + ' мин';
 
@@ -354,7 +355,7 @@
     if (state.address && p && !p.coords) {
       return `<div class="free-progress">У заведения нет точки на карте — показана минимальная стоимость доставки, точную назовёт курьер.</div>`;
     }
-    return `<button class="free-progress addr-prompt" type="button" data-pick-address>📍 Укажите адрес — рассчитаем доставку: от ${rub(COURIER.min)}, ${COURIER.perKm} ₽/км</button>`;
+    return `<button class="free-progress addr-prompt" type="button" data-pick-address>📍 Укажите адрес — рассчитаем доставку: от ${rub(COURIER.min)}, ${fmtRate(COURIER.perKm)} ₽/км</button>`;
   }
 
   function totalsHtml(t) {
@@ -567,7 +568,7 @@
           <span class="promo-emoji" aria-hidden="true">🥙</span>
         </section>
         <section class="services" aria-label="Услуги курьера">
-          <a class="service" href="#/send/courier"><span class="service-icon" aria-hidden="true">🛵</span><span><b>Курьер</b><small>Забрать или купить в заведении из каталога — от ${rub(COURIER.min)}, ${COURIER.perKm} ₽/км</small></span></a>
+          <a class="service" href="#/send/courier"><span class="service-icon" aria-hidden="true">🛵</span><span><b>Курьер</b><small>Забрать или купить в заведении из каталога — от ${rub(COURIER.min)}, ${fmtRate(COURIER.perKm)} ₽/км</small></span></a>
         </section>
         <nav class="cats" id="chips" aria-label="Категории">
           ${Object.entries(CATEGORIES).map(([k, v]) => `
@@ -737,7 +738,7 @@
               <h1>${esc(p.name)}</h1>
               ${p.description ? `<p>${esc(p.description)}</p>` : ''}
               <div class="hero-chips">
-                <span class="hero-chip">🛵 Курьер от ${rub(COURIER.min)} · ${COURIER.perKm} ₽/км</span>
+                <span class="hero-chip">🛵 Курьер от ${rub(COURIER.min)} · ${fmtRate(COURIER.perKm)} ₽/км</span>
                 ${hasMenu ? `<span class="hero-chip">Заказ от ${rub(DELIVERY.minOrder)}</span>` : ''}
                 ${p.workingHours ? `<span class="hero-chip">🕒 ${esc(p.workingHours)}</span>` : ''}
                 ${p.verified ? '<span class="hero-chip">✓ Проверено</span>' : ''}
@@ -845,7 +846,7 @@
         <div class="info-row"><span>📍</span><span>${esc(p.city)}, ${esc(p.address || 'адрес уточняется')}</span></div>
         ${p.workingHours ? `<div class="info-row"><span>🕒</span><span>${esc(p.workingHours)}</span></div>` : ''}
         ${phones ? `<div class="info-row"><span>☎</span><span>${phones}</span></div>` : ''}
-        <div class="info-row"><span>🛵</span><span>Доставка по тарифу «Курьер»: подача ${rub(COURIER.base)} + ${COURIER.perKm} ₽/км. Курьер поднимется к двери — ${rub(COURIER.doorFee)}. Минимальный заказ — ${rub(DELIVERY.minOrder)}.</span></div>
+        <div class="info-row"><span>🛵</span><span>Доставка по тарифу «Курьер»: подача ${rub(COURIER.base)} + ${fmtRate(COURIER.perKm)} ₽/км. Курьер поднимется к двери — ${rub(COURIER.doorFee)}. Минимальный заказ — ${rub(DELIVERY.minOrder)}.</span></div>
         ${links ? `<div class="info-links">${links}</div>` : ''}
       </div>`;
     $('#infoModal').showModal();
@@ -1164,7 +1165,7 @@
         <b class="tariff-price">${p ? rub(p.total) : 'от ' + rub(tariff.min)}</b>
       </div>
       ${p ? `<div class="breakdown">
-        <div><span>Подача ${rub(p.base)} + ${fmtKm(q.route.distance)} × ${tariff.perKm} ₽${tariff.perMin ? ` + ${p.minutes} мин × ${tariff.perMin} ₽` : ''}</span><span>${rub(p.ride)}</span></div>
+        <div><span>Подача ${rub(p.base)} + ${fmtKm(q.route.distance)} × ${fmtRate(tariff.perKm)} ₽${tariff.perMin ? ` + ${p.minutes} мин × ${tariff.perMin} ₽` : ''}</span><span>${rub(p.ride)}</span></div>
         ${p.door ? `<div><span>Выход курьера к двери</span><span>${rub(p.door)}</span></div>` : ''}
       </div>` : ''}
       <label class="check"><input type="checkbox" id="doorOpt" ${state.door ? 'checked' : ''}> Курьер поднимется к двери <span class="muted">+${rub(tariff.doorFee)}</span></label>
@@ -1420,7 +1421,7 @@
     $('#sendQuote').innerHTML = tariffCardHtml(COURIER, q, q ? '' : noPoint ? 'У заведения нет точки на карте — точную стоимость назовёт курьер.' : 'Укажите обе точки — посчитаем по маршруту.');
     $('#sendTotal').innerHTML = q
       ? `<div class="totals"><div><span>Доставка</span><span>${rub(q.price.total)}</span></div>${sendPurchase() ? '<div><span>Покупка</span><span>по чеку</span></div>' : ''}</div>`
-      : `<p class="hint">Стоимость — от ${rub(COURIER.min)}, ${COURIER.perKm} ₽/км по городу.</p>`;
+      : `<p class="hint">Стоимость — от ${rub(COURIER.min)}, ${fmtRate(COURIER.perKm)} ₽/км по городу.</p>`;
     $('#sendSum').textContent = q ? rub(q.price.total) : '';
   }
 
