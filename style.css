@@ -724,6 +724,12 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
 .dot { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 13px; color: #fff; flex: none; }
 .dot-a { background: var(--ink); }
 .dot-b { background: var(--accent); }
+.place-pick-hint { margin: -6px 0 14px; }
+.place-picker { grid-template-areas: "side map" "picked picked" "done done"; }
+.place-pick-item { display: flex; flex-direction: column; align-items: flex-start; text-align: left; width: 100%; padding: 10px 12px; border-radius: 12px; }
+.place-pick-item:hover { background: var(--surface); }
+.place-pick-item[aria-pressed="true"] { background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent) inset; }
+.place-pick-item small { color: var(--muted); font-size: 12px; }
 .addr-card { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: #fff; text-align: left; box-shadow: 0 0 0 1px var(--line) inset; }
 .addr-card:hover { box-shadow: 0 0 0 2px var(--accent) inset; }
 .addr-card-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -791,6 +797,8 @@ a.order-card:hover { box-shadow: 0 0 0 2px var(--surface-2); }
 @media (max-width: 720px) {
   .services { grid-template-columns: 1fr; gap: 8px; }
   .picker { grid-template-columns: 1fr; grid-template-areas: "side" "map" "picked" "details" "done"; }
+  .place-picker { grid-template-areas: "side" "map" "picked" "done"; }
+  .place-picker .picker-side { max-height: 240px; overflow-y: auto; }
   .picker-side { max-height: none; }
   .picker-map-wrap { height: 260px; }
   .row4 { grid-template-columns: repeat(2, 1fr); }

@@ -7,7 +7,7 @@
   <meta name="description" content="Доставка еды и продуктов из проверенных халяль-заведений Махачкалы и Каспийска.">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=2">
-  <link rel="stylesheet" href="style.css?v=48">
+  <link rel="stylesheet" href="style.css?v=49">
 </head>
 <body>
   <header class="header">
@@ -81,6 +81,24 @@
       </div>
       <button class="btn btn-primary btn-block" type="submit">Готово</button>
     </form>
+  </dialog>
+
+  <!-- Откуда забрать: только заведения из каталога -->
+  <dialog class="modal modal-picker" id="placeModal" tabindex="-1">
+    <button class="icon-btn modal-close" type="button" data-close-modal aria-label="Закрыть">✕</button>
+    <h2 id="placePickerTitle">Откуда забрать?</h2>
+    <p class="hint place-pick-hint">Доставляем только из заведений нашего каталога.</p>
+    <div class="segmented" id="placeCityGrid" role="group" aria-label="Город"></div>
+    <div class="picker place-picker">
+      <div class="picker-side">
+        <label class="header-search picker-search"><span aria-hidden="true">🔍</span>
+          <input id="placeSearch" type="search" placeholder="Название или адрес" aria-label="Поиск заведения" autocomplete="off"></label>
+        <div id="placeList"></div>
+      </div>
+      <div class="picker-map-wrap"><div class="map" id="placeMap"></div></div>
+      <div class="picker-picked" id="placePicked"></div>
+      <button class="btn btn-primary btn-block" type="button" id="placeDone">Готово</button>
+    </div>
   </dialog>
 
   <!-- Карточка блюда -->
