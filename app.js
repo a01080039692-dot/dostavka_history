@@ -72,7 +72,10 @@
     activePlaceId: null,
     // Адрес доставки: { label, full, city, coords, flat, entrance, floor, intercom, courier }
     address: store.get('address', null),
-    quote: null
+    quote: null,
+    // Опции курьера: «Выйти, забрать» и «Выйти, отдать».
+    exitPick: store.get('exitPick', false),
+    exitDrop: store.get('exitDrop', false)
   };
 
   // Сохранённые город и корзина могли остаться от города, который отключили.
@@ -233,7 +236,7 @@
     const subtotal = cartLines().reduce((s, l) => s + l.item.price * l.qty, 0);
     const q = currentQuote();
     // Пока адрес не указан, показываем минимальную стоимость тарифа «Курьер».
-    const fee = subtotal === 0 ? 0 : q ? q.price.total : COURIER.min;
+    const fee = subtotal === 0 ? 0 : q ? q.price.total : DL.minPrice('courier', exitOpts()).total;
     return { subtotal, fee, feeKnown: !!q, quote: q, total: subtotal + fee, canOrder: subtotal >= DELIVERY.minOrder };
   }
 
@@ -242,8 +245,10 @@
     const p = placeById(state.cart.placeId);
     const a = state.address;
     if (!p || !p.coords || !a || !a.coords) return null;
-    return p.id + '|' + a.coords.join(',');
+    return p.id + '|' + a.coords.join(',') + '|' + (state.exitPick ? 1 : 0) + (state.exitDrop ? 1 : 0);
   }
+
+  const exitOpts = () => ({ exitPick: state.exitPick, exitDrop: state.exitDrop });
 
   function currentQuote() {
     const k = quoteKey();
@@ -260,7 +265,7 @@
     DL.route(p.coords, a.coords, { traffic: true }).then((r) => {
       if (quotePending === k) quotePending = null;
       if (quoteKey() !== k) return;
-      state.quote = { key: k, route: r, price: DL.price('courier', r.distance, { durationS: r.duration, jamS: r.jamS, intercity: DL.isIntercity(p, a) }) };
+      state.quote = { key: k, route: r, price: DL.price('courier', r.distance, { durationS: r.duration, jamS: r.jamS, ...exitOpts(), intercity: DL.isIntercity(p, a) }) };
       renderCartIndicators();
       refreshAfterCartChange(null, null);
     });
@@ -1151,6 +1156,15 @@
     return d.getTime();
   }
 
+  function optionSwitchHtml(key, title, about, fee) {
+    return `<label class="option">
+      <span class="option-text"><b>${esc(title)}</b><small>${esc(about)}</small></span>
+      <span class="option-fee">+${rub(fee)}</span>
+      <input type="checkbox" role="switch" data-opt="${key}" ${state[key] ? 'checked' : ''}>
+      <span class="switch" aria-hidden="true"></span>
+    </label>`;
+  }
+
   function tariffCardHtml(tariff, q, extra) {
     const p = q && q.price;
     return `
@@ -1167,7 +1181,13 @@
         <div><span>${fmtKm(q.route.distance)} × ${fmtRate(p.rate)} ₽${p.intercity ? ' (между городами)' : ''}${p.byMin ? `, но не меньше ${rub(tariff.min)}` : ''}</span><span>${rub(p.kmPart)}</span></div>
         ${p.jam ? `<div><span>Пробки${p.jamSource === 'yandex' ? ' (Яндекс Карты)' : ''}: +${p.jamMin} мин × ${tariff.jamPerMin} ₽</span><span>${rub(p.jam)}</span></div>` : ''}
         ${p.ride !== p.kmPart + p.jam ? `<div><span>Округление до 10 ₽</span><span>${rub(p.ride)}</span></div>` : ''}
+        ${p.exitPick ? `<div><span>Выйти, забрать</span><span>${rub(p.exitPick)}</span></div>` : ''}
+        ${p.exitDrop ? `<div><span>Выйти, отдать</span><span>${rub(p.exitDrop)}</span></div>` : ''}
       </div>` : ''}
+      <div class="options">
+        ${optionSwitchHtml('exitPick', 'Выйти, забрать', 'Курьер зайдёт за отправлением, а не будет ждать у входа', tariff.exitPickFee)}
+        ${optionSwitchHtml('exitDrop', 'Выйти, отдать', 'Курьер поднимется и отдаст в руки', tariff.exitDropFee)}
+      </div>
       <p class="hint">${tariff.freeWaitMin} мин ожидания бесплатно, дальше ${tariff.waitPerMin} ₽/мин. ${extra || ''}</p>`;
   }
 
@@ -1301,8 +1321,8 @@
     const createdAt = Date.now();
     const { route, approach } = await buildRoutes(from, to, createdAt);
     const priceD = route
-      ? DL.price('courier', route.distance, { durationS: route.duration, jamS: route.jamS, intercity: DL.isIntercity(place, to) })
-      : { ride: COURIER.min, door: 0, total: COURIER.min, estimate: true };
+      ? DL.price('courier', route.distance, { durationS: route.duration, jamS: route.jamS, ...exitOpts(), intercity: DL.isIntercity(place, to) })
+      : DL.minPrice('courier', exitOpts());
     const subtotal = cartTotals().subtotal;
     const order = {
       id: 'o' + createdAt.toString(36),
@@ -1410,7 +1430,7 @@
     const { from, to } = sendDraft;
     if (!from || !to || !from.coords || !to.coords) return null;
     const r = await DL.route(from.coords, to.coords, { traffic: true });
-    return { route: r, price: DL.price('courier', r.distance, { durationS: r.duration, jamS: r.jamS, intercity: DL.isIntercity(from, to) }) };
+    return { route: r, price: DL.price('courier', r.distance, { durationS: r.duration, jamS: r.jamS, ...exitOpts(), intercity: DL.isIntercity(from, to) }) };
   }
 
   async function updateSendQuote() {
@@ -1445,8 +1465,8 @@
     const to = { ...sendDraft.to };
     const { route, approach } = await buildRoutes(from, to, createdAt);
     const priceD = route
-      ? DL.price('courier', route.distance, { durationS: route.duration, jamS: route.jamS, intercity: DL.isIntercity(from, to) })
-      : { ride: COURIER.min, door: 0, total: COURIER.min, estimate: true };
+      ? DL.price('courier', route.distance, { durationS: route.duration, jamS: route.jamS, ...exitOpts(), intercity: DL.isIntercity(from, to) })
+      : DL.minPrice('courier', exitOpts());
     const order = {
       id: 'o' + createdAt.toString(36),
       number: String(createdAt).slice(-5),
@@ -1535,6 +1555,8 @@
       `Телефон: ${o.customer.phone}`,
       `Адрес: ${to.city || o.city}, ${toLine}`,
       to.courier ? `Курьеру: ${to.courier}` : '',
+      o.delivery && o.delivery.price && o.delivery.price.exitPick ? 'Курьер выйдет и заберёт' : '',
+      o.delivery && o.delivery.price && o.delivery.price.exitDrop ? 'Курьер выйдет и отдаст в руки' : '',
       to.coords ? `Точка на карте 2ГИС: ${twoGisPointUrl(to.city || o.city, to.coords)}` : '',
       `Когда: ${o.scheduledAt ? 'к ' + fmtTime(o.scheduledAt) : 'как можно скорее'}`,
       `Оплата: ${PAYMENT[o.payment]}`,
@@ -1626,7 +1648,9 @@
       <div class="totals">
         ${o.subtotal ? `<div><span>Товары</span><span>${rub(o.subtotal)}</span></div>` : ''}
         <div><span>${esc(tariff.name)}${o.route ? ' · ' + fmtKm(o.route.distance) : ''}</span><span>${rub(p.total - (p.door || 0))}</span></div>
-        ${p.door ? `<div><span>Курьер к двери</span><span>${rub(p.door)}</span></div>` : ''}
+        ${p.exitPick ? `<div><span>Выйти, забрать</span><span>${rub(p.exitPick)}</span></div>` : ''}
+        ${p.exitDrop ? `<div><span>Выйти, отдать</span><span>${rub(p.exitDrop)}</span></div>` : ''}
+        ${p.door && !p.exitPick && !p.exitDrop ? `<div><span>Курьер к двери</span><span>${rub(p.door)}</span></div>` : ''}
         ${o.type === 'buy' || o.purchase ? '<div><span>Покупка</span><span>по чеку</span></div>' : ''}
         <div class="total"><span>Итого</span><span>${rub(o.total)}</span></div>
         <div class="muted" style="font-size:13px">${esc(PAYMENT[o.payment] || '')}</div>
@@ -1848,6 +1872,17 @@
       if (state.userPos) { state.userPos = null; t.setAttribute('aria-pressed', 'false'); renderResults(); return; }
       locateUser(() => { t.setAttribute('aria-pressed', 'true'); renderResults(); });
     }
+  });
+
+  document.addEventListener('change', (e) => {
+    const k = e.target.dataset && e.target.dataset.opt;
+    if (!k) return;
+    state[k] = e.target.checked;
+    store.set(k, state[k]);
+    if ($('#view').dataset.kind) { updateSendQuote(); return; }
+    renderCartIndicators();
+    refreshAfterCartChange(null, null);
+    ensureQuote();
   });
 
   document.addEventListener('keydown', (e) => {
