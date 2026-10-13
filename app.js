@@ -257,10 +257,10 @@
     quotePending = k;
     const p = placeById(state.cart.placeId);
     const a = state.address;
-    DL.route(p.coords, a.coords).then((r) => {
+    DL.route(p.coords, a.coords, { traffic: true }).then((r) => {
       if (quotePending === k) quotePending = null;
       if (quoteKey() !== k) return;
-      state.quote = { key: k, route: r, price: DL.price('courier', r.distance, { durationS: r.duration, intercity: DL.isIntercity(p, a) }) };
+      state.quote = { key: k, route: r, price: DL.price('courier', r.distance, { durationS: r.duration, jamS: r.jamS, intercity: DL.isIntercity(p, a) }) };
       renderCartIndicators();
       refreshAfterCartChange(null, null);
     });
@@ -1165,7 +1165,7 @@
       </div>
       ${p ? `<div class="breakdown">
         <div><span>${fmtKm(q.route.distance)} × ${fmtRate(p.rate)} ₽${p.intercity ? ' (между городами)' : ''}${p.byMin ? `, но не меньше ${rub(tariff.min)}` : ''}</span><span>${rub(p.kmPart)}</span></div>
-        ${p.jam ? `<div><span>Пробки: +${p.jamMin} мин × ${tariff.jamPerMin} ₽</span><span>${rub(p.jam)}</span></div>` : ''}
+        ${p.jam ? `<div><span>Пробки${p.jamSource === 'yandex' ? ' (Яндекс Карты)' : ''}: +${p.jamMin} мин × ${tariff.jamPerMin} ₽</span><span>${rub(p.jam)}</span></div>` : ''}
         ${p.ride !== p.kmPart + p.jam ? `<div><span>Округление до 10 ₽</span><span>${rub(p.ride)}</span></div>` : ''}
       </div>` : ''}
       <p class="hint">${tariff.freeWaitMin} мин ожидания бесплатно, дальше ${tariff.waitPerMin} ₽/мин. ${extra || ''}</p>`;
@@ -1273,7 +1273,7 @@
   }
 
   async function buildRoutes(from, to, seed) {
-    const route = from.coords && to.coords ? await DL.route(from.coords, to.coords) : null;
+    const route = from.coords && to.coords ? await DL.route(from.coords, to.coords, { traffic: true }) : null;
     const startPt = from.coords ? DL.courierStart(from.coords, seed) : null;
     const approach = startPt ? await DL.route(startPt, from.coords) : null;
     return { route, approach };
@@ -1301,7 +1301,7 @@
     const createdAt = Date.now();
     const { route, approach } = await buildRoutes(from, to, createdAt);
     const priceD = route
-      ? DL.price('courier', route.distance, { durationS: route.duration, intercity: DL.isIntercity(place, to) })
+      ? DL.price('courier', route.distance, { durationS: route.duration, jamS: route.jamS, intercity: DL.isIntercity(place, to) })
       : { ride: COURIER.min, door: 0, total: COURIER.min, estimate: true };
     const subtotal = cartTotals().subtotal;
     const order = {
@@ -1409,8 +1409,8 @@
   async function sendQuote() {
     const { from, to } = sendDraft;
     if (!from || !to || !from.coords || !to.coords) return null;
-    const r = await DL.route(from.coords, to.coords);
-    return { route: r, price: DL.price('courier', r.distance, { durationS: r.duration, intercity: DL.isIntercity(from, to) }) };
+    const r = await DL.route(from.coords, to.coords, { traffic: true });
+    return { route: r, price: DL.price('courier', r.distance, { durationS: r.duration, jamS: r.jamS, intercity: DL.isIntercity(from, to) }) };
   }
 
   async function updateSendQuote() {
@@ -1445,7 +1445,7 @@
     const to = { ...sendDraft.to };
     const { route, approach } = await buildRoutes(from, to, createdAt);
     const priceD = route
-      ? DL.price('courier', route.distance, { durationS: route.duration, intercity: DL.isIntercity(from, to) })
+      ? DL.price('courier', route.distance, { durationS: route.duration, jamS: route.jamS, intercity: DL.isIntercity(from, to) })
       : { ride: COURIER.min, door: 0, total: COURIER.min, estimate: true };
     const order = {
       id: 'o' + createdAt.toString(36),

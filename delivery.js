@@ -15,8 +15,9 @@
   // ---------- Тариф ----------
   // Пока тариф один — «Курьер»: доставка из заведения, посылки и «купим и привезём».
   // Как у «Такси Анжи»: минимум 100 ₽, 28 ₽ за км по городу, 3 минуты ожидания бесплатно, дальше 7 ₽/мин,
-  // выхода к двери нет. Пробки — надбавкой: если по маршруту 2ГИС ехать дольше, чем со средней скоростью
-  // без пробок (freeKmh), за каждую лишнюю минуту — jamPerMin.
+  // выхода к двери нет. Пробки — надбавкой jamPerMin за каждую минуту, потерянную в пробках. Сколько минут
+  // теряется, берём у Яндекс Карт (время с пробками минус время без пробок), а без ключа Яндекса —
+  // из маршрута 2ГИС: сколько он едет дольше, чем со средней скоростью без пробок (freeKmh).
   const TARIFFS = {
     courier: {
       id: 'courier',
@@ -43,12 +44,14 @@
     const minutes = Math.max(0, (opts && opts.durationS) || 0) / 60;
     const rate = opts && opts.intercity ? t.perKmIntercity : t.perKm;
     const kmPart = Math.max(t.min, km * rate);
-    const jamMin = Math.max(0, Math.floor(minutes - (km / t.freeKmh) * 60));
+    const fromYandex = opts && typeof opts.jamS === 'number';
+    const lost = fromYandex ? opts.jamS / 60 : minutes - (km / t.freeKmh) * 60;
+    const jamMin = Math.max(0, Math.floor(lost));
     const jam = jamMin * t.jamPerMin;
     const ride = Math.round((kmPart + jam) / 10) * 10;
     return {
       ride, door: 0, total: ride,
-      kmPart: Math.round(kmPart), byMin: km * rate < t.min, jam, jamMin,
+      kmPart: Math.round(kmPart), byMin: km * rate < t.min, jam, jamMin, jamSource: fromYandex ? 'yandex' : '2gis',
       km: Math.round(km * 10) / 10, minutes: Math.round(minutes), rate, intercity: !!(opts && opts.intercity)
     };
   }
@@ -131,8 +134,10 @@
     });
   }
 
-  async function route(a, b) {
-    const key = a.join(',') + '>' + b.join(',');
+  // opts.traffic — узнать у Яндекса, сколько минут теряется в пробках (для расчёта цены).
+  async function route(a, b, opts) {
+    const traffic = !!(opts && opts.traffic);
+    const key = a.join(',') + '>' + b.join(',') + (traffic ? '|t' : '');
     if (routeCache[key]) return routeCache[key];
     let res = null;
     if (KEY) {
@@ -171,8 +176,46 @@
       const d = haversine(a, b) * 1.35;
       res = { distance: Math.round(d), duration: Math.round(d / (TARIFFS.courier.freeKmh * 1000 / 3600)), path: [a, b], source: 'estimate' };
     }
+    const jam = traffic ? await yandexJam(a, b) : null;
+    if (jam) res.jamS = jam.jamS;
     routeCache[key] = res;
     return res;
+  }
+
+  // ---------- Пробки (Яндекс Карты) ----------
+  // Маршрут Яндекса на машине: duration — время без пробок, durationInTraffic — с текущими пробками.
+  const YKEY = CONFIG.yandexMapsKey;
+  let ymapsReady = null;
+
+  function loadYmaps() {
+    if (!ymapsReady) {
+      ymapsReady = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=' + encodeURIComponent(YKEY);
+        s.onload = () => window.ymaps.ready(() => resolve(window.ymaps), reject);
+        s.onerror = reject;
+        document.head.appendChild(s);
+      }).catch((e) => { ymapsReady = null; throw e; });
+    }
+    return ymapsReady;
+  }
+
+  function yandexJam(a, b) {
+    if (!YKEY || typeof document === 'undefined') return Promise.resolve(null);
+    const ask = loadYmaps().then((ymaps) => new Promise((resolve) => {
+      const model = new ymaps.multiRouter.MultiRouteModel([a, b], { routingMode: 'auto' });
+      model.events.add('requestsuccess', () => {
+        const r = model.getRoutes()[0];
+        if (!r) { resolve(null); return; }
+        const plain = r.properties.get('duration');
+        const traffic = r.properties.get('durationInTraffic');
+        resolve(plain && traffic ? { jamS: Math.max(0, traffic.value - plain.value) } : null);
+      });
+      model.events.add('requestfail', () => resolve(null));
+    }));
+    // Если Яндекс не ответил за 6 секунд — считаем без него.
+    const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 6000));
+    return Promise.race([ask, timeout]).catch((e) => { console.warn('Пробки Яндекса недоступны:', e); return null; });
   }
 
   // Точка на маршруте через долю пути 0…1.
