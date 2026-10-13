@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Водитель · Доставка History</title>
+  <meta name="description" content="Приложение водителя и курьера Доставки History.">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <link rel="stylesheet" href="../vendor/leaflet/leaflet.css?v=2">
+  <link rel="stylesheet" href="../style.css?v=50">
+  <link rel="stylesheet" href="driver.css?v=50">
+</head>
+<body class="driver">
+  <header class="d-top">
+    <span class="brand"><span class="brand-mark" aria-hidden="true">H</span><span class="d-brand-text">Водитель</span></span>
+    <button class="d-online" id="onlineBtn" type="button" aria-pressed="false">Не на линии</button>
+    <button class="d-earn" id="earnBtn" type="button" aria-label="Заработок за сегодня">0 ₽</button>
+    <button class="icon-btn" id="profileBtn" type="button" aria-label="Профиль">👤</button>
+  </header>
+
+  <main class="d-main">
+    <div class="d-map"><div class="map" id="dMap"></div></div>
+    <section class="d-sheet" id="sheet" aria-live="polite"></section>
+  </main>
+
+  <!-- Профиль водителя -->
+  <dialog class="modal" id="profileModal" tabindex="-1">
+    <button class="icon-btn modal-close" type="button" data-close-modal aria-label="Закрыть">✕</button>
+    <h2>Профиль водителя</h2>
+    <form class="form" id="profileForm" novalidate>
+      <div class="field"><label for="p-name">Имя</label><input id="p-name" name="name" autocomplete="name" required></div>
+      <div class="field"><label for="p-phone">Телефон</label><input id="p-phone" name="phone" type="tel" autocomplete="tel" placeholder="+7 900 000-00-00" required></div>
+      <fieldset class="field">
+        <legend>Транспорт</legend>
+        <div class="choice-grid">
+          <label class="choice"><input type="radio" name="transport" value="car" checked> 🚗 Автомобиль</label>
+          <label class="choice"><input type="radio" name="transport" value="moto"> 🛵 Мото/скутер</label>
+          <label class="choice"><input type="radio" name="transport" value="bike"> 🚲 Велосипед</label>
+          <label class="choice"><input type="radio" name="transport" value="foot"> 🚶 Пешком</label>
+        </div>
+      </fieldset>
+      <div class="row2">
+        <div class="field"><label for="p-car">Марка и цвет</label><input id="p-car" name="car" placeholder="Lada Granta, белая"></div>
+        <div class="field"><label for="p-plate">Госномер</label><input id="p-plate" name="plate" placeholder="А 123 ВС 05"></div>
+      </div>
+      <p class="hint warn" id="profileError" hidden></p>
+      <button class="btn btn-primary btn-block" type="submit">Сохранить</button>
+    </form>
+  </dialog>
+
+  <!-- История заказов -->
+  <dialog class="modal" id="historyModal" tabindex="-1">
+    <button class="icon-btn modal-close" type="button" data-close-modal aria-label="Закрыть">✕</button>
+    <h2>Заработок</h2>
+    <div id="historyBody"></div>
+  </dialog>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="../vendor/leaflet/leaflet.js"></script>
+  <script src="../config.js?v=8"></script>
+  <script src="../map.js?v=46"></script>
+  <script src="../delivery.js?v=50"></script>
+  <script src="../bus.js?v=50"></script>
+  <script src="driver.js?v=51"></script>
+</body>
+</html>

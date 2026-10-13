@@ -244,6 +244,37 @@
     return { stage, ...info, courier, eta, tl, elapsed: t };
   }
 
+  // Ход заказа, который ведёт водитель в приложении (disp — запись из DostavkaBus.dispatch).
+  // Время прибытия оцениваем по прямой до следующей точки: × 1,35 на изгибы дорог, 30 км/ч.
+  const SPEED = 30000 / 3600;
+  const etaSec = (a, b) => (a && b ? (haversine(a, b) * 1.35) / SPEED : 0);
+
+  function progressLive(order, disp, driver, now) {
+    if (order.cancelled) return { stage: 'cancelled', ...STAGES.cancelled, live: true };
+    now = now || Date.now();
+    const pos = driver && driver.pos;
+    const ride = (order.route && order.route.duration) || etaSec(order.from.coords, order.to.coords);
+    const st = disp && disp.status;
+    let stage;
+    let eta = null;
+    if (!st) {
+      stage = order.scheduledAt && order.scheduledAt - now > 60 * 60000 ? 'scheduled' : 'search';
+    } else if (st === 'accepted') {
+      stage = 'toPickup';
+      const ready = order.type === 'food' ? Math.max(0, order.createdAt / 1000 + COOKING_SEC - now / 1000) : 0;
+      eta = now + (Math.max(etaSec(pos, order.from.coords), ready) + 120 + ride) * 1000;
+    } else if (st === 'arrived') {
+      stage = 'atPickup';
+      eta = now + (120 + ride) * 1000;
+    } else if (st === 'picked') {
+      stage = 'toClient';
+      eta = now + Math.max(60, etaSec(pos, order.to.coords)) * 1000;
+    } else stage = 'delivered';
+    const info = stage === 'scheduled' ? { label: 'Запланирован', icon: '🕒' } : STAGES[stage];
+    const courier = ['toPickup', 'atPickup', 'toClient'].includes(stage) ? pos || null : null;
+    return { stage, ...info, courier, eta, live: true, driver: disp && disp.driver };
+  }
+
   // ---------- Сохранённые адреса ----------
   function loadSaved() {
     try { return JSON.parse(localStorage.getItem('dostavka.addresses') || '[]'); } catch (e) { return []; }
@@ -261,7 +292,7 @@
   }
 
   window.DostavkaDelivery = {
-    TARIFFS, STAGES, price, suggest, reverse, route, pointAt, courierStart, timeline, progress,
+    TARIFFS, STAGES, price, suggest, reverse, route, pointAt, courierStart, timeline, progress, progressLive,
     haversine, savedAddresses: loadSaved, rememberAddress,
     forgetAddress(i) { const l = loadSaved(); l.splice(i, 1); saveSaved(l); },
     hasGeo: () => !!KEY

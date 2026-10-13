@@ -1312,6 +1312,7 @@
       tariff: 'courier',
       placeId: place.id,
       placeName: place.name,
+      placePhone: (place.phones && place.phones[0]) || '',
       city: place.city,
       items: cartLines().map((l) => ({ name: l.item.name, price: l.item.price, unit: l.item.unit, qty: l.qty })),
       subtotal,
@@ -1324,7 +1325,8 @@
       payment: v('payment'),
       comment: v('comment'),
       createdAt,
-      cancelled: false
+      cancelled: false,
+      dispatchMode: BUS.driverOnline() ? 'driver' : 'demo'
     };
     state.orders.unshift(order);
     store.set('orders', state.orders);
@@ -1457,6 +1459,7 @@
       what: v('what'),
       budget: purchase ? v('budget') : '',
       recipientPhone: v('rphone'),
+      placePhone: (() => { const pl = from.placeId && placeById(from.placeId); return (pl && pl.phones && pl.phones[0]) || ''; })(),
       items: [],
       subtotal: 0,
       fee: priceD.total,
@@ -1468,7 +1471,8 @@
       payment: v('payment'),
       comment: '',
       createdAt,
-      cancelled: false
+      cancelled: false,
+      dispatchMode: BUS.driverOnline() ? 'driver' : 'demo'
     };
     state.orders.unshift(order);
     store.set('orders', state.orders);
@@ -1501,12 +1505,21 @@
     return 'Курьер';
   }
 
+  const BUS = window.DostavkaBus;
+
+  // Заказ ведёт водитель из приложения (dispatchMode 'driver') или демо-курьер сайта.
+  function orderProgress(o) {
+    if (o.dispatchMode === 'driver') return DL.progressLive(o, BUS.dispatchOf(o.id), BUS.driver());
+    return orderProgress(o);
+  }
+
   const fmtTime = (ms) => new Date(ms).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 
   function etaText(pr, o) {
     if (pr.stage === 'delivered' || pr.stage === 'cancelled') return '';
     const left = Math.max(1, Math.round((pr.eta - Date.now()) / 60000));
     if (pr.stage === 'scheduled') return `Доставим к ${fmtTime(o.scheduledAt)}`;
+    if (!pr.eta) return 'Время прибытия назовём, когда курьер примет заказ';
     return `Приедет к ${fmtTime(pr.eta)} · через ${left} ${plural(left, 'минуту', 'минуты', 'минут')}`;
   }
 
@@ -1540,7 +1553,7 @@
   ];
 
   function orderCardHtml(o) {
-    const pr = DL.progress(o);
+    const pr = orderProgress(o);
     const date = new Date(o.createdAt).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
     return `
       <a class="order-card" href="#/orders/${esc(o.id)}">
@@ -1568,6 +1581,7 @@
 
   let trackMap = null;
   let trackTimer = null;
+  let trackTick = () => {};
   let trackStage = null;
 
   function stopTracking() {
@@ -1601,10 +1615,8 @@
       ${pr.stage === 'search' ? '<div class="searching"><i></i><i></i><i></i></div>' : ''}
       ${stepIdx >= 0 ? `<ol class="steps-v">${TRACK_STEPS.map((s, i) => `<li class="${i < stepIdx ? 'done' : i === stepIdx ? 'now' : ''}">${esc(s.label)}</li>`).join('')}</ol>` : ''}
       ${['toPickup', 'atPickup', 'toClient'].includes(pr.stage) ? `
-        <div class="courier-card">
-          <span class="courier-ava" aria-hidden="true">🛵</span>
-          <div><b>Курьер назначен</b><small>Демо-режим: пока нет приложения для курьеров, его движение показывает сайт</small></div>
-        </div>` : ''}
+        ${courierCardHtml(pr)}` : ''}
+      ${pr.stage === 'search' && o.dispatchMode === 'driver' && Date.now() - o.createdAt > 120000 ? '<p class="hint">Курьеры сейчас заняты — ищем дольше обычного.</p>' : ''}
       <div class="track-block">
         <div class="route-points">
           <div class="route-point"><span class="dot dot-a">A</span><div><b>${esc(o.from.label)}</b><small>${esc(o.from.sub || o.from.city || '')}</small></div></div>
@@ -1631,6 +1643,24 @@
       <p class="hint" style="margin-top:14px">№${esc(o.number)} · Работаем круглосуточно.</p>`;
   }
 
+  function courierCardHtml(pr) {
+    const dr = pr.driver;
+    if (!pr.live || !dr) {
+      return `<div class="courier-card">
+        <span class="courier-ava" aria-hidden="true">🛵</span>
+        <div><b>Курьер назначен</b><small>Демо-режим: водителя на линии не было, движение курьера показывает сайт</small></div>
+      </div>`;
+    }
+    const phone = waPhone(dr.phone);
+    return `<div class="courier-card">
+      <span class="courier-ava" aria-hidden="true">${esc(TRANSPORT_ICONS[dr.transport] || '🛵')}</span>
+      <div style="flex:1"><b>${esc(dr.name)}</b><small>${esc([dr.car, dr.plate].filter(Boolean).join(' · ') || 'Курьер')}</small></div>
+      ${phone ? `<a class="btn" href="tel:+${esc(phone)}">Позвонить</a>` : ''}
+    </div>`;
+  }
+
+  const TRANSPORT_ICONS = { car: '🚗', moto: '🛵', bike: '🚲', foot: '🚶' };
+
   function ratingHtml(o) {
     const r = o.rating;
     if (r && r.saved) {
@@ -1645,7 +1675,8 @@
 
   function updateTrackMap(o, pr) {
     if (!trackMap) return;
-    if (pr.courier) trackMap.setMarker('courier', pr.courier, '<div class="courier-pin">🛵</div>', [18, 18]);
+    const icon = (pr.driver && TRANSPORT_ICONS[pr.driver.transport]) || '🛵';
+    if (pr.courier) trackMap.setMarker('courier', pr.courier, `<div class="courier-pin">${icon}</div>`, [18, 18]);
     else trackMap.removeMarker('courier');
   }
 
@@ -1658,21 +1689,22 @@
         ${hasMap ? '<div class="track-map"><div class="map" id="trackMap"></div></div>' : ''}
         <aside class="track-panel${hasMap ? '' : ' no-map'}" id="trackPanel"></aside>
       </div>`;
-    const draw = () => {
-      const pr = DL.progress(o);
+    trackTick = () => {
+      const cur = state.orders.find((x) => x.id === id) || o;
+      const pr = orderProgress(cur);
       if (pr.stage !== trackStage) {
         trackStage = pr.stage;
-        $('#trackPanel').innerHTML = trackPanelHtml(o, pr);
+        $('#trackPanel').innerHTML = trackPanelHtml(cur, pr);
       } else {
         const eta = $('#trackEta');
-        if (eta) eta.textContent = etaText(pr, o);
+        if (eta) eta.textContent = etaText(pr, cur);
       }
-      updateTrackMap(o, pr);
+      updateTrackMap(cur, pr);
     };
-    draw();
+    trackTick();
     trackTimer = setInterval(() => {
       if (!document.body.contains($('#trackPanel'))) { stopTracking(); return; }
-      draw();
+      trackTick();
     }, 1000);
     if (!hasMap) return;
     const center = (o.to && o.to.coords) || o.from.coords;
@@ -1683,7 +1715,7 @@
       if (o.from.coords) { m.setMarker('from', o.from.coords, pointPin('A', 'pin-a')); pts.push(o.from.coords); }
       if (o.to.coords) { m.setMarker('to', o.to.coords, pointPin('B', 'pin-b')); pts.push(o.to.coords); }
       if (o.route) m.setRoute(o.route.path);
-      const pr0 = DL.progress(o);
+      const pr0 = orderProgress(o);
       if (pr0.courier) pts.push(pr0.courier);
       m.fitTo(pts.length ? pts : [center]);
       updateTrackMap(o, pr0);
@@ -1862,6 +1894,13 @@
   $('#cartOverlay').addEventListener('click', () => openCart(false));
   $('#addressButton').addEventListener('click', openAddressModal);
   window.addEventListener('hashchange', route);
+
+  // Изменения из приложения водителя (другая вкладка): статус заказа, координаты водителя.
+  BUS.subscribe((key) => {
+    if (key === BUS.KEYS.orders) state.orders = BUS.orders().map(normalizeOrder);
+    if (location.hash.startsWith('#/orders/') && trackTimer) trackTick();
+    else if (location.hash === '#/orders') renderOrders();
+  });
 
   // Список заказов обновляем раз в 30 секунд, пока он открыт.
   setInterval(() => {
