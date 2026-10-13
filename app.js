@@ -261,7 +261,7 @@
     DL.route(p.coords, a.coords).then((r) => {
       if (quotePending === k) quotePending = null;
       if (quoteKey() !== k) return;
-      state.quote = { key: k, route: r, price: DL.price('courier', r.distance, { durationS: r.duration, door: state.door }) };
+      state.quote = { key: k, route: r, price: DL.price('courier', r.distance, { durationS: r.duration, door: state.door, intercity: DL.isIntercity(p, a) }) };
       renderCartIndicators();
       refreshAfterCartChange(null, null);
     });
@@ -846,7 +846,7 @@
         <div class="info-row"><span>📍</span><span>${esc(p.city)}, ${esc(p.address || 'адрес уточняется')}</span></div>
         ${p.workingHours ? `<div class="info-row"><span>🕒</span><span>${esc(p.workingHours)}</span></div>` : ''}
         ${phones ? `<div class="info-row"><span>☎</span><span>${phones}</span></div>` : ''}
-        <div class="info-row"><span>🛵</span><span>Доставка по тарифу «Курьер»: подача ${rub(COURIER.base)} + ${fmtRate(COURIER.perKm)} ₽/км. Курьер поднимется к двери — ${rub(COURIER.doorFee)}. Минимальный заказ — ${rub(DELIVERY.minOrder)}.</span></div>
+        <div class="info-row"><span>🛵</span><span>Доставка по тарифу «Курьер»: подача ${rub(COURIER.base)} + ${fmtRate(COURIER.perKm)} ₽/км по городу, ${fmtRate(COURIER.perKmIntercity)} ₽/км между Махачкалой и Каспийском. Курьер поднимется к двери — ${rub(COURIER.doorFee)}. Минимальный заказ — ${rub(DELIVERY.minOrder)}.</span></div>
         ${links ? `<div class="info-links">${links}</div>` : ''}
       </div>`;
     $('#infoModal').showModal();
@@ -1165,7 +1165,7 @@
         <b class="tariff-price">${p ? rub(p.total) : 'от ' + rub(tariff.min)}</b>
       </div>
       ${p ? `<div class="breakdown">
-        <div><span>Подача ${rub(p.base)} + ${fmtKm(q.route.distance)} × ${fmtRate(tariff.perKm)} ₽${tariff.perMin ? ` + ${p.minutes} мин × ${tariff.perMin} ₽` : ''}</span><span>${rub(p.ride)}</span></div>
+        <div><span>Подача ${rub(p.base)} + ${fmtKm(q.route.distance)} × ${fmtRate(p.rate)} ₽${p.intercity ? ' (между городами)' : ''}${tariff.perMin ? ` + ${p.minutes} мин × ${tariff.perMin} ₽` : ''}</span><span>${rub(p.ride)}</span></div>
         ${p.door ? `<div><span>Выход курьера к двери</span><span>${rub(p.door)}</span></div>` : ''}
       </div>` : ''}
       <label class="check"><input type="checkbox" id="doorOpt" ${state.door ? 'checked' : ''}> Курьер поднимется к двери <span class="muted">+${rub(tariff.doorFee)}</span></label>
@@ -1302,7 +1302,7 @@
     const createdAt = Date.now();
     const { route, approach } = await buildRoutes(from, to, createdAt);
     const priceD = route
-      ? DL.price('courier', route.distance, { durationS: route.duration, door: state.door })
+      ? DL.price('courier', route.distance, { durationS: route.duration, door: state.door, intercity: DL.isIntercity(place, to) })
       : { ride: COURIER.min, door: state.door ? COURIER.doorFee : 0, total: COURIER.min + (state.door ? COURIER.doorFee : 0), estimate: true };
     const subtotal = cartTotals().subtotal;
     const order = {
@@ -1411,7 +1411,7 @@
     const { from, to } = sendDraft;
     if (!from || !to || !from.coords || !to.coords) return null;
     const r = await DL.route(from.coords, to.coords);
-    return { route: r, price: DL.price('courier', r.distance, { durationS: r.duration, door: state.door }) };
+    return { route: r, price: DL.price('courier', r.distance, { durationS: r.duration, door: state.door, intercity: DL.isIntercity(from, to) }) };
   }
 
   async function updateSendQuote() {
@@ -1446,7 +1446,7 @@
     const to = { ...sendDraft.to };
     const { route, approach } = await buildRoutes(from, to, createdAt);
     const priceD = route
-      ? DL.price('courier', route.distance, { durationS: route.duration, door: state.door })
+      ? DL.price('courier', route.distance, { durationS: route.duration, door: state.door, intercity: DL.isIntercity(from, to) })
       : { ride: COURIER.min, door: state.door ? COURIER.doorFee : 0, total: COURIER.min + (state.door ? COURIER.doorFee : 0), estimate: true };
     const order = {
       id: 'o' + createdAt.toString(36),

@@ -14,10 +14,11 @@
 
   // ---------- Тариф ----------
   // Пока тариф один — «Курьер»: доставка из заведения, посылки и «купим и привезём».
-  // Тариф «Курьер»: подача 200 ₽ + 16,6 ₽ за км, без платы за минуты — цена не зависит от пробок.
-  // Ориентир — приложение «Такси Анжи», у которого цены одной поездки меняются со временем
-  // (Гамидова 12а → Малыгина 45: 240 ₽, позже 210 ₽). У нас: Гамидова 14 — 200 ₽, Гамидова 18л/1 — 210 ₽,
-  // Малыгина 45 — 220 ₽, Каспийск, Ленина 52д — 470 ₽.
+  // Тариф «Курьер»: подача 200 ₽ + 16,6 ₽ за км по городу, 26,6 ₽ за км между городами
+  // (Махачкала ↔ Каспийск), без платы за минуты — цена не зависит от пробок.
+  // Ориентир — приложение «Такси Анжи», у которого цены одной поездки меняются со временем.
+  // Из Meat Lavka (Гамидова 12а): Гамидова 14 — 200 ₽, Гамидова 18л/1 — 210 ₽, Малыгина 45 — 220 ₽,
+  // Каспийск, Ленина 52д (16,5 км) — 640 ₽, как у Анжи 13.10.2026.
   const TARIFFS = {
     courier: {
       id: 'courier',
@@ -25,7 +26,8 @@
       icon: '🛵',
       about: 'Доставим заказ или посылку, купим и привезём — от двери до двери',
       base: 200,      // подача — входит в каждую поездку
-      perKm: 16.6,
+      perKm: 16.6,     // по городу
+      perKmIntercity: 26.6, // между городами: точки A и B в разных городах
       perMin: 0,      // плата за минуту в пути; 0 — цена не зависит от пробок
       freeWaitMin: 3,
       waitPerMin: 7,
@@ -36,21 +38,27 @@
   // Заказы, оформленные до объединения тарифов, ссылаются на «buy».
   TARIFFS.buy = TARIFFS.courier;
 
-  // Стоимость: подача + километры (+ минуты в пути, если perMin > 0),
+  // Стоимость: подача + километры по городской или междугородней ставке (+ минуты в пути, если perMin > 0),
   // округление до ближайших 10 ₽, плюс выход курьера к двери.
   function price(tariffId, distanceM, opts) {
     const t = TARIFFS[tariffId];
     const km = Math.max(0, distanceM) / 1000;
     const minutes = Math.max(0, (opts && opts.durationS) || 0) / 60;
-    const kmPart = km * t.perKm;
+    const rate = opts && opts.intercity ? t.perKmIntercity : t.perKm;
+    const kmPart = km * rate;
     const minPart = minutes * t.perMin;
     const ride = Math.round((t.base + kmPart + minPart) / 10) * 10;
     const door = opts && opts.door ? t.doorFee : 0;
     return {
       ride, door, total: ride + door,
       base: t.base, kmPart: Math.round(kmPart), minPart: Math.round(minPart),
-      km: Math.round(km * 10) / 10, minutes: Math.round(minutes), rate: t.perKm
+      km: Math.round(km * 10) / 10, minutes: Math.round(minutes), rate, intercity: !!(opts && opts.intercity)
     };
+  }
+
+  // Между городами — когда у точек указаны разные города (Махачкала ↔ Каспийск).
+  function isIntercity(a, b) {
+    return !!(a && b && a.city && b.city && a.city !== b.city);
   }
 
   // ---------- Адреса (2ГИС Каталог) ----------
@@ -302,7 +310,7 @@
   }
 
   window.DostavkaDelivery = {
-    TARIFFS, STAGES, price, suggest, reverse, route, pointAt, courierStart, timeline, progress, progressLive,
+    TARIFFS, STAGES, price, isIntercity, suggest, reverse, route, pointAt, courierStart, timeline, progress, progressLive,
     haversine, savedAddresses: loadSaved, rememberAddress,
     forgetAddress(i) { const l = loadSaved(); l.splice(i, 1); saveSaved(l); },
     hasGeo: () => !!KEY
