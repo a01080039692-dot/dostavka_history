@@ -12,33 +12,24 @@
   const CATALOG = 'https://catalog.api.2gis.com/3.0';
   const ROUTING = 'https://routing.api.2gis.com/routing/7.0.0/global';
 
-  // ---------- Тарифы ----------
+  // ---------- Тариф ----------
+  // Пока тариф один — «Курьер»: доставка из заведения, посылки и «купим и привезём».
   const TARIFFS = {
     courier: {
       id: 'courier',
       name: 'Курьер',
       icon: '🛵',
-      about: 'Доставка заказов и посылок от двери до двери',
+      about: 'Доставим заказ или посылку, купим и привезём — от двери до двери',
       min: 100,
       perKmCity: 28,
       perKmOut: 33,
       freeWaitMin: 3,
       waitPerMin: 7,
       doorFee: 50 // выход курьера: отдать или забрать
-    },
-    buy: {
-      id: 'buy',
-      name: 'Купим и привезём',
-      icon: '🛍️',
-      about: 'Курьер купит что нужно и привезёт, вы рассчитаетесь на месте',
-      min: 200,
-      perKmCity: 28,
-      perKmOut: 33,
-      freeWaitMin: 10,
-      waitPerMin: 7,
-      doorFee: 50 // выйти отдать; выйти забрать — включено
     }
   };
+  // Заказы, оформленные до объединения тарифов, ссылаются на «buy».
+  TARIFFS.buy = TARIFFS.courier;
 
   // Стоимость: не меньше минимальной, за километры — городской или загородный тариф,
   // плюс выход курьера к двери. Округляем до 10 ₽, как принято у такси.
@@ -221,7 +212,8 @@
     const assigned = SEARCH_SEC;
     const arrive = assigned + approach;
     const ready = order.type === 'food' ? COOKING_SEC : 0;
-    const wait = order.type === 'buy' ? 10 * 60 : order.type === 'courier' ? 3 * 60 : 60;
+    // Ожидание на месте забора: покупка дольше, чем просто забрать посылку.
+    const wait = order.type === 'buy' || order.purchase ? 10 * 60 : order.type === 'courier' ? 3 * 60 : 60;
     const depart = Math.max(arrive, ready) + (order.type === 'food' ? 60 : wait);
     const deliveredAt = depart + ride;
     const start = order.scheduledAt ? Math.max(0, (order.scheduledAt - order.createdAt) / 1000 - deliveredAt) : 0;

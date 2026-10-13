@@ -568,8 +568,7 @@
           <span class="promo-emoji" aria-hidden="true">🥙</span>
         </section>
         <section class="services" aria-label="Услуги курьера">
-          <a class="service" href="#/send/courier"><span class="service-icon" aria-hidden="true">🛵</span><span><b>Курьер</b><small>Отправить посылку или документы — от ${rub(DL.TARIFFS.courier.min)}</small></span></a>
-          <a class="service" href="#/send/buy"><span class="service-icon" aria-hidden="true">🛍️</span><span><b>Купим и привезём</b><small>Курьер купит что нужно — от ${rub(DL.TARIFFS.buy.min)}</small></span></a>
+          <a class="service" href="#/send/courier"><span class="service-icon" aria-hidden="true">🛵</span><span><b>Курьер</b><small>Отправить посылку или купить и привезти — от ${rub(COURIER.min)}, ${COURIER.perKmCity} ₽/км</small></span></a>
         </section>
         <nav class="cats" id="chips" aria-label="Категории">
           ${Object.entries(CATEGORIES).map(([k, v]) => `
@@ -1220,34 +1219,31 @@
   // ---------- Курьер и «Купим и привезём» ----------
   const sendDraft = { from: null, to: null };
 
-  function renderSend(kind) {
-    const tariff = DL.TARIFFS[kind === 'buy' ? 'buy' : 'courier'];
+  function renderSend(preset) {
+    const tariff = COURIER;
     const c = customer();
+    const purchase = preset === 'buy';
     if (!sendDraft.to && state.address) sendDraft.to = { ...state.address };
     $('#view').innerHTML = `
       <div class="wrap page">
         <a class="back" href="#/">← На главную</a>
         <h1 class="page-title">${tariff.icon} ${esc(tariff.name)}</h1>
-        <div class="segmented" style="margin:-8px 0 20px" role="group" aria-label="Услуга">
-          <a class="seg-link" href="#/send/courier" aria-pressed="${kind !== 'buy'}">🛵 Отправить посылку</a>
-          <a class="seg-link" href="#/send/buy" aria-pressed="${kind === 'buy'}">🛍️ Купим и привезём</a>
-        </div>
         <div class="checkout">
           <form class="form" id="sendForm" novalidate>
             <section class="block">
               <h2>Маршрут</h2>
               <div class="route-points">
-                <div class="route-point"><span class="dot dot-a">A</span><div style="flex:1">${addressCardHtml(sendDraft.from, kind === 'buy' ? 'Где купить?' : 'Откуда забрать?', 'data-pick-point="from"')}</div></div>
+                <div class="route-point"><span class="dot dot-a">A</span><div style="flex:1">${addressCardHtml(sendDraft.from, 'Откуда забрать или где купить?', 'data-pick-point="from"')}</div></div>
                 <div class="route-point"><span class="dot dot-b">B</span><div style="flex:1">${addressCardHtml(sendDraft.to, 'Куда привезти?', 'data-pick-point="to"')}</div></div>
               </div>
             </section>
             <section class="block">
-              <h2>${kind === 'buy' ? 'Что купить' : 'Что везём'}</h2>
+              <h2>Что забрать или купить</h2>
               <div class="form">
-                <div class="field"><textarea name="what" aria-label="Описание" placeholder="${kind === 'buy' ? 'Например: 2 кг говядины на кости, лаваш, зелень' : 'Например: документы в конверте, небольшая коробка'}"></textarea></div>
-                ${kind === 'buy'
-                  ? '<div class="field"><label for="s-budget">Примерная сумма покупки, ₽</label><input id="s-budget" name="budget" inputmode="numeric" placeholder="Например, 1500"></div><p class="hint">Покупку оплачиваете курьеру при получении вместе с доставкой.</p>'
-                  : '<div class="field"><label for="s-rphone">Телефон получателя</label><input id="s-rphone" name="rphone" type="tel" placeholder="+7 900 000-00-00"></div>'}
+                <div class="field"><textarea name="what" aria-label="Описание" placeholder="Например: документы в конверте — или купить 2 кг говядины на кости и лаваш"></textarea></div>
+                <label class="check" style="margin-top:0"><input type="checkbox" id="purchaseOpt" name="purchase" ${purchase ? 'checked' : ''}> Курьер должен купить</label>
+                <div class="field" id="budgetField" ${purchase ? '' : 'hidden'}><label for="s-budget">Примерная сумма покупки, ₽</label><input id="s-budget" name="budget" inputmode="numeric" placeholder="Например, 1500"><span class="hint">Покупку оплачиваете курьеру при получении вместе с доставкой.</span></div>
+                <div class="field"><label for="s-rphone">Телефон получателя, если это не вы</label><input id="s-rphone" name="rphone" type="tel" placeholder="+7 900 000-00-00"></div>
               </div>
             </section>
             <section class="block">
@@ -1281,39 +1277,42 @@
           </aside>
         </div>
       </div>`;
-    $('#view').dataset.kind = kind;
+    $('#view').dataset.kind = 'courier';
     bindWhen('s');
-    $('#sendForm').addEventListener('submit', (e) => submitSend(e, kind));
-    updateSendQuote(kind);
+    $('#purchaseOpt').addEventListener('change', (e) => { $('#budgetField').hidden = !e.target.checked; updateSendQuote(); });
+    $('#sendForm').addEventListener('submit', submitSend);
+    updateSendQuote();
   }
 
-  async function sendQuote(kind) {
+  const sendPurchase = () => !!($('#purchaseOpt') && $('#purchaseOpt').checked);
+
+  async function sendQuote() {
     const { from, to } = sendDraft;
     if (!from || !to || !from.coords || !to.coords) return null;
     const r = await DL.route(from.coords, to.coords);
     const outOfCity = !!(from.city && to.city && from.city !== to.city);
-    return { route: r, price: DL.price(kind === 'buy' ? 'buy' : 'courier', r.distance, { outOfCity, door: state.door }) };
+    return { route: r, price: DL.price('courier', r.distance, { outOfCity, door: state.door }) };
   }
 
-  async function updateSendQuote(kind) {
-    const tariff = DL.TARIFFS[kind === 'buy' ? 'buy' : 'courier'];
-    const q = await sendQuote(kind);
+  async function updateSendQuote() {
+    const q = await sendQuote();
     if (!$('#sendQuote')) return;
-    $('#sendQuote').innerHTML = tariffCardHtml(tariff, q, q ? '' : 'Укажите обе точки — посчитаем по маршруту.');
+    $('#sendQuote').innerHTML = tariffCardHtml(COURIER, q, q ? '' : 'Укажите обе точки — посчитаем по маршруту.');
     $('#sendTotal').innerHTML = q
-      ? `<div class="totals"><div><span>Доставка</span><span>${rub(q.price.total)}</span></div>${kind === 'buy' ? '<div><span>Покупка</span><span>по чеку</span></div>' : ''}</div>`
-      : `<p class="hint">Стоимость — от ${rub(tariff.min)}, ${tariff.perKmCity} ₽/км по городу.</p>`;
+      ? `<div class="totals"><div><span>Доставка</span><span>${rub(q.price.total)}</span></div>${sendPurchase() ? '<div><span>Покупка</span><span>по чеку</span></div>' : ''}</div>`
+      : `<p class="hint">Стоимость — от ${rub(COURIER.min)}, ${COURIER.perKmCity} ₽/км по городу.</p>`;
     $('#sendSum').textContent = q ? rub(q.price.total) : '';
   }
 
-  async function submitSend(e, kind) {
+  async function submitSend(e) {
     e.preventDefault();
     const form = e.target;
     const f = new FormData(form);
     const v = (k) => String(f.get(k) || '').trim();
-    if (!sendDraft.from) return formError(kind === 'buy' ? 'Укажите, где купить.' : 'Укажите, откуда забрать.');
+    const purchase = sendPurchase();
+    if (!sendDraft.from) return formError(purchase ? 'Укажите, где купить.' : 'Укажите, откуда забрать.');
     if (!sendDraft.to) return formError('Укажите, куда привезти.');
-    if (!v('what')) return formError(kind === 'buy' ? 'Напишите, что купить.' : 'Напишите, что везём.');
+    if (!v('what')) return formError(purchase ? 'Напишите, что купить.' : 'Напишите, что забрать.');
     if (!v('name')) return formError('Укажите имя.');
     if (v('phone').replace(/\D/g, '').length < 10) return formError('Укажите телефон.');
     if (v('when') === 'time' && !v('time')) return formError('Укажите время.');
@@ -1325,19 +1324,18 @@
     const from = { ...sendDraft.from };
     const to = { ...sendDraft.to };
     const { route, approach } = await buildRoutes(from, to, createdAt);
-    const tariffId = kind === 'buy' ? 'buy' : 'courier';
-    const t = DL.TARIFFS[tariffId];
     const priceD = route
-      ? DL.price(tariffId, route.distance, { outOfCity: !!(from.city && to.city && from.city !== to.city), door: state.door })
-      : { ride: t.min, door: state.door ? t.doorFee : 0, total: t.min + (state.door ? t.doorFee : 0), estimate: true };
+      ? DL.price('courier', route.distance, { outOfCity: !!(from.city && to.city && from.city !== to.city), door: state.door })
+      : { ride: COURIER.min, door: state.door ? COURIER.doorFee : 0, total: COURIER.min + (state.door ? COURIER.doorFee : 0), estimate: true };
     const order = {
       id: 'o' + createdAt.toString(36),
       number: String(createdAt).slice(-5),
-      type: tariffId,
-      tariff: tariffId,
+      type: 'courier',
+      tariff: 'courier',
+      purchase,
       city: from.city || state.city,
       what: v('what'),
-      budget: v('budget'),
+      budget: purchase ? v('budget') : '',
       recipientPhone: v('rphone'),
       items: [],
       subtotal: 0,
@@ -1492,14 +1490,14 @@
           <div class="route-point"><span class="dot dot-a">A</span><div><b>${esc(o.from.label)}</b><small>${esc(o.from.sub || o.from.city || '')}</small></div></div>
           <div class="route-point"><span class="dot dot-b">B</span><div><b>${esc(o.to.label)}</b><small>${esc([o.to.flat && 'кв. ' + o.to.flat, o.to.entrance && 'подъезд ' + o.to.entrance, o.to.floor && 'этаж ' + o.to.floor].filter(Boolean).join(', ') || o.to.city || '')}</small></div></div>
         </div>
-        ${o.what ? `<p class="order-items"><b>${o.type === 'buy' ? 'Купить' : 'Везём'}:</b> ${esc(o.what)}${o.budget ? ` · до ${esc(o.budget)} ₽` : ''}</p>` : ''}
+        ${o.what ? `<p class="order-items"><b>${o.type === 'buy' || o.purchase ? 'Купить' : 'Забрать'}:</b> ${esc(o.what)}${o.budget ? ` · до ${esc(o.budget)} ₽` : ''}</p>` : ''}
         ${o.items.length ? `<p class="order-items">${o.items.map((i) => `${esc(i.name)} × ${i.qty}`).join(', ')}</p>` : ''}
       </div>
       <div class="totals">
         ${o.subtotal ? `<div><span>Товары</span><span>${rub(o.subtotal)}</span></div>` : ''}
         <div><span>${esc(tariff.name)}${o.route ? ' · ' + fmtKm(o.route.distance) : ''}</span><span>${rub(p.total - (p.door || 0))}</span></div>
         ${p.door ? `<div><span>Курьер к двери</span><span>${rub(p.door)}</span></div>` : ''}
-        ${o.type === 'buy' ? '<div><span>Покупка</span><span>по чеку</span></div>' : ''}
+        ${o.type === 'buy' || o.purchase ? '<div><span>Покупка</span><span>по чеку</span></div>' : ''}
         <div class="total"><span>Итого</span><span>${rub(o.total)}</span></div>
         <div class="muted" style="font-size:13px">${esc(PAYMENT[o.payment] || '')}</div>
       </div>
@@ -1610,7 +1608,7 @@
     } else if (parts[0] === 'orders') {
       renderOrders();
     } else if (parts[0] === 'send') {
-      renderSend(parts[1] === 'buy' ? 'buy' : 'courier');
+      renderSend(parts[1]);
     } else {
       renderHome();
     }
@@ -1632,13 +1630,19 @@
     if (d.pickPoint) {
       const kind = $('#view').dataset.kind;
       picker.open({
-        title: d.pickPoint === 'from' ? (kind === 'buy' ? 'Где купить?' : 'Откуда забрать?') : 'Куда привезти?',
+        title: d.pickPoint === 'from' ? (sendPurchase() ? 'Где купить?' : 'Откуда забрать?') : 'Куда привезти?',
         value: sendDraft[d.pickPoint],
         details: true,
         onDone: (addr) => {
           sendDraft[d.pickPoint] = addr;
           if (d.pickPoint === 'to') setAddress(addr);
-          renderSend(kind);
+          // Форма перерисовывается — сохраняем то, что уже введено.
+          const ids = ['s-budget', 's-rphone', 's-name', 's-phone'];
+          const keep = { what: ($('textarea[name="what"]') || {}).value || '', purchase: sendPurchase() };
+          ids.forEach((id) => { const el = document.getElementById(id); if (el) keep[id] = el.value; });
+          renderSend(keep.purchase ? 'buy' : 'courier');
+          $('textarea[name="what"]').value = keep.what;
+          ids.forEach((id) => { if (keep[id] !== undefined) document.getElementById(id).value = keep[id]; });
         }
       });
       return;
@@ -1701,7 +1705,7 @@
     if (e.target.id === 'doorOpt') {
       state.door = e.target.checked;
       store.set('door', state.door);
-      if ($('#view').dataset.kind) { updateSendQuote($('#view').dataset.kind); return; }
+      if ($('#view').dataset.kind) { updateSendQuote(); return; }
       renderCartIndicators();
       refreshAfterCartChange(null, null);
       ensureQuote();
