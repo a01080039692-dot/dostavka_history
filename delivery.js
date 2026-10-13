@@ -14,33 +14,43 @@
 
   // ---------- Тариф ----------
   // Пока тариф один — «Курьер»: доставка из заведения, посылки и «купим и привезём».
+  // Подобрано по ценам приложения «Такси Анжи», тариф «Курьер», 13.10.2026 — совпадает на всех поездках:
+  //   Гамидова 12а → Гамидова 14 (0,11 км, 0,5 мин) — 200 ₽;  → Гамидова 18л/1 (0,65 км, 2,2 мин) — 220 ₽;
+  //   → Малыгина 45 (1,27 км, 5,2 мин) — 240 ₽;  → Каспийск, Ленина 52д (16,5 км, 23,9 мин) — 690 ₽.
+  // Махачкала → Каспийск Анжи считает по той же ставке за км, отдельной загородной нет.
   const TARIFFS = {
     courier: {
       id: 'courier',
       name: 'Курьер',
       icon: '🛵',
       about: 'Доставим заказ или посылку, купим и привезём — от двери до двери',
-      min: 100,
-      perKmCity: 28,
-      perKmOut: 33,
+      base: 200,      // подача — входит в каждую поездку
+      perKm: 28,
+      perMin: 1,      // минута в пути: в пробках поездка дороже
       freeWaitMin: 3,
       waitPerMin: 7,
-      doorFee: 50 // выход курьера: отдать или забрать
+      doorFee: 50     // выход курьера: отдать или забрать
     }
   };
+  TARIFFS.courier.min = TARIFFS.courier.base; // дешевле подачи поездка не бывает
   // Заказы, оформленные до объединения тарифов, ссылаются на «buy».
   TARIFFS.buy = TARIFFS.courier;
 
-  // Стоимость: не меньше минимальной, за километры — городской или загородный тариф,
-  // плюс выход курьера к двери. Округляем до 10 ₽, как принято у такси.
+  // Стоимость: подача + километры + минуты в пути (время 2ГИС с учётом пробок),
+  // округление до ближайших 10 ₽, плюс выход курьера к двери.
   function price(tariffId, distanceM, opts) {
     const t = TARIFFS[tariffId];
     const km = Math.max(0, distanceM) / 1000;
-    const rate = opts && opts.outOfCity ? t.perKmOut : t.perKmCity;
-    const byKm = Math.ceil((km * rate) / 10) * 10;
-    const ride = Math.max(t.min, byKm);
+    const minutes = Math.max(0, (opts && opts.durationS) || 0) / 60;
+    const kmPart = km * t.perKm;
+    const minPart = minutes * t.perMin;
+    const ride = Math.round((t.base + kmPart + minPart) / 10) * 10;
     const door = opts && opts.door ? t.doorFee : 0;
-    return { ride, door, total: ride + door, km: Math.round(km * 10) / 10, rate, outOfCity: !!(opts && opts.outOfCity) };
+    return {
+      ride, door, total: ride + door,
+      base: t.base, kmPart: Math.round(kmPart), minPart: Math.round(minPart),
+      km: Math.round(km * 10) / 10, minutes: Math.round(minutes), rate: t.perKm
+    };
   }
 
   // ---------- Адреса (2ГИС Каталог) ----------
