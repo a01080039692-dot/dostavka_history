@@ -14,44 +14,41 @@
 
   // ---------- Тариф ----------
   // Пока тариф один — «Курьер»: доставка из заведения, посылки и «купим и привезём».
-  // Тариф «Курьер»: подача 200 ₽ + 16,6 ₽ за км по городу, 26,6 ₽ за км между городами
-  // (Махачкала ↔ Каспийск), без платы за минуты — цена не зависит от пробок.
-  // Ориентир — приложение «Такси Анжи», у которого цены одной поездки меняются со временем.
-  // Из Meat Lavka (Гамидова 12а): Гамидова 14 — 200 ₽, Гамидова 18л/1 — 210 ₽, Малыгина 45 — 220 ₽,
-  // Каспийск, Ленина 52д (16,5 км) — 640 ₽, как у Анжи 13.10.2026.
+  // Как у «Такси Анжи»: минимум 100 ₽, 28 ₽ за км по городу, 3 минуты ожидания бесплатно, дальше 7 ₽/мин,
+  // выхода к двери нет. Пробки — надбавкой: если по маршруту 2ГИС ехать дольше, чем со средней скоростью
+  // без пробок (freeKmh), за каждую лишнюю минуту — jamPerMin.
   const TARIFFS = {
     courier: {
       id: 'courier',
       name: 'Курьер',
       icon: '🛵',
-      about: 'Доставим заказ или посылку, купим и привезём — от двери до двери',
-      base: 200,      // подача — входит в каждую поездку
-      perKm: 16.6,     // по городу
-      perKmIntercity: 26.6, // между городами: точки A и B в разных городах
-      perMin: 0,      // плата за минуту в пути; 0 — цена не зависит от пробок
+      about: 'Доставим заказ из заведения, купим и привезём',
+      min: 100,             // минимальная стоимость поездки
+      perKm: 28,            // по городу
+      perKmIntercity: 33,   // между городами: точки A и B в разных городах (Махачкала ↔ Каспийск)
+      freeKmh: 30,          // средняя скорость по городу без пробок
+      jamPerMin: 7,         // надбавка за минуту, потерянную в пробках
       freeWaitMin: 3,
-      waitPerMin: 7,
-      doorFee: 50     // выход курьера: отдать или забрать
+      waitPerMin: 7
     }
   };
-  TARIFFS.courier.min = TARIFFS.courier.base; // дешевле подачи поездка не бывает
   // Заказы, оформленные до объединения тарифов, ссылаются на «buy».
   TARIFFS.buy = TARIFFS.courier;
 
-  // Стоимость: подача + километры по городской или междугородней ставке (+ минуты в пути, если perMin > 0),
-  // округление до ближайших 10 ₽, плюс выход курьера к двери.
+  // Стоимость: километры по городской или междугородней ставке, но не меньше минимума,
+  // плюс надбавка за пробки; округление до ближайших 10 ₽.
   function price(tariffId, distanceM, opts) {
     const t = TARIFFS[tariffId];
     const km = Math.max(0, distanceM) / 1000;
     const minutes = Math.max(0, (opts && opts.durationS) || 0) / 60;
     const rate = opts && opts.intercity ? t.perKmIntercity : t.perKm;
-    const kmPart = km * rate;
-    const minPart = minutes * t.perMin;
-    const ride = Math.round((t.base + kmPart + minPart) / 10) * 10;
-    const door = opts && opts.door ? t.doorFee : 0;
+    const kmPart = Math.max(t.min, km * rate);
+    const jamMin = Math.max(0, Math.floor(minutes - (km / t.freeKmh) * 60));
+    const jam = jamMin * t.jamPerMin;
+    const ride = Math.round((kmPart + jam) / 10) * 10;
     return {
-      ride, door, total: ride + door,
-      base: t.base, kmPart: Math.round(kmPart), minPart: Math.round(minPart),
+      ride, door: 0, total: ride,
+      kmPart: Math.round(kmPart), byMin: km * rate < t.min, jam, jamMin,
       km: Math.round(km * 10) / 10, minutes: Math.round(minutes), rate, intercity: !!(opts && opts.intercity)
     };
   }
@@ -170,9 +167,9 @@
       }
     }
     if (!res) {
-      // Оценка без маршрутизатора: прямая × 1,35, средняя скорость 30 км/ч.
+      // Оценка без маршрутизатора: прямая × 1,35, скорость как без пробок — надбавки нет.
       const d = haversine(a, b) * 1.35;
-      res = { distance: Math.round(d), duration: Math.round(d / (30000 / 3600)), path: [a, b], source: 'estimate' };
+      res = { distance: Math.round(d), duration: Math.round(d / (TARIFFS.courier.freeKmh * 1000 / 3600)), path: [a, b], source: 'estimate' };
     }
     routeCache[key] = res;
     return res;
