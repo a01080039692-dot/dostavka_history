@@ -850,7 +850,7 @@
         <div class="info-row"><span>📍</span><span>${esc(p.city)}, ${esc(p.address || 'адрес уточняется')}</span></div>
         ${p.workingHours ? `<div class="info-row"><span>🕒</span><span>${esc(p.workingHours)}</span></div>` : ''}
         ${phones ? `<div class="info-row"><span>☎</span><span>${phones}</span></div>` : ''}
-        <div class="info-row"><span>🛵</span><span>Доставка по тарифу «Курьер»: от ${rub(COURIER.min)}, ${fmtRate(COURIER.perKm)} ₽/км по городу, ${fmtRate(COURIER.perKmIntercity)} ₽/км между Махачкалой и Каспийском, в пробках — надбавка ${COURIER.jamPerMin} ₽ за лишнюю минуту. Минимальный заказ — ${rub(DELIVERY.minOrder)}.</span></div>
+        <div class="info-row"><span>🛵</span><span>Доставка по тарифу «Курьер»: подача ${rub(COURIER.base)} + ${fmtRate(COURIER.perKm)} ₽/км по городу, ${fmtRate(COURIER.perKmIntercity)} ₽/км между Махачкалой и Каспийском, в пробках — надбавка ${COURIER.jamPerMin} ₽ за лишнюю минуту. Минимальный заказ — ${rub(DELIVERY.minOrder)}.</span></div>
         ${links ? `<div class="info-links">${links}</div>` : ''}
       </div>`;
     $('#infoModal').showModal();
@@ -1178,9 +1178,11 @@
         <b class="tariff-price">${p ? rub(p.total) : 'от ' + rub(tariff.min)}</b>
       </div>
       ${p ? `<div class="breakdown">
-        <div><span>${fmtKm(q.route.distance)} × ${fmtRate(p.rate)} ₽${p.intercity ? ' (между городами)' : ''}${p.byMin ? `, но не меньше ${rub(tariff.min)}` : ''}</span><span>${rub(p.kmPart)}</span></div>
+        <div><span>Подача</span><span>${rub(p.base)}</span></div>
+        <div><span>${fmtKm(q.route.distance)} × ${fmtRate(p.rate)} ₽${p.intercity ? ' (между городами)' : ''}</span><span>${rub(p.kmPart)}</span></div>
         ${p.jam ? `<div><span>Пробки${p.jamSource === 'yandex' ? ' (Яндекс Карты)' : ''}: +${p.jamMin} мин × ${tariff.jamPerMin} ₽</span><span>${rub(p.jam)}</span></div>` : ''}
-        ${p.ride !== p.kmPart + p.jam ? `<div><span>Округление до 10 ₽</span><span>${rub(p.ride)}</span></div>` : ''}
+        ${p.surge && p.surge !== 1 ? `<div><span>Повышенный спрос × ${fmtRate(p.surge)}</span><span>${rub(p.raw)}</span></div>` : ''}
+        <div><span>Поездка, с округлением до 10 ₽</span><span>${rub(p.ride)}</span></div>
         ${p.exitPick ? `<div><span>Выйти, забрать</span><span>${rub(p.exitPick)}</span></div>` : ''}
         ${p.exitDrop ? `<div><span>Выйти, отдать</span><span>${rub(p.exitDrop)}</span></div>` : ''}
       </div>` : ''}

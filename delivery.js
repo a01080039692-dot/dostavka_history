@@ -14,8 +14,8 @@
 
   // ---------- Тариф ----------
   // Пока тариф один — «Курьер»: доставка из заведения, посылки и «купим и привезём».
-  // Как у «Такси Анжи»: минимум 100 ₽, 28 ₽ за км по городу, 3 минуты ожидания бесплатно, дальше 7 ₽/мин,
-  // выхода к двери нет. Пробки — надбавкой jamPerMin за каждую минуту, потерянную в пробках. Сколько минут
+  // Как у «Такси Анжи»: подача 100 ₽ + 28 ₽ за км по городу (33 ₽ между городами), 3 минуты ожидания
+  // бесплатно, дальше 7 ₽/мин. Динамический коэффициент (surge) пока 1 — его зададим позже. Пробки — надбавкой jamPerMin за каждую минуту, потерянную в пробках. Сколько минут
   // теряется, берём у Яндекс Карт (время с пробками минус время без пробок), а без ключа Яндекса —
   // из маршрута 2ГИС: сколько он едет дольше, чем со средней скоростью без пробок (freeKmh).
   const TARIFFS = {
@@ -24,7 +24,8 @@
       name: 'Курьер',
       icon: '🛵',
       about: 'Доставим заказ из заведения, купим и привезём',
-      min: 100,             // минимальная стоимость поездки
+      base: 100,            // подача — прибавляется к каждой поездке
+      surge: 1,             // динамический коэффициент спроса: умножает подачу, километры и пробки
       perKm: 28,            // по городу
       perKmIntercity: 33,   // между городами: точки A и B в разных городах (Махачкала ↔ Каспийск)
       freeKmh: 30,          // средняя скорость по городу без пробок
@@ -35,26 +36,29 @@
       waitPerMin: 7
     }
   };
+  TARIFFS.courier.min = TARIFFS.courier.base; // дешевле подачи поездка не бывает — для подписей «от 100 ₽»
   // Заказы, оформленные до объединения тарифов, ссылаются на «buy».
   TARIFFS.buy = TARIFFS.courier;
 
-  // Стоимость: километры по городской или междугородней ставке, но не меньше минимума,
-  // плюс надбавка за пробки; округление до ближайших 10 ₽. Опции «Выйти, забрать» и «Выйти, отдать» — сверху.
+  // Стоимость: (подача + километры по городской или междугородней ставке + надбавка за пробки) × коэффициент,
+  // округление до ближайших 10 ₽. Опции «Выйти, забрать» и «Выйти, отдать» — сверху.
   function price(tariffId, distanceM, opts) {
     const t = TARIFFS[tariffId];
     const km = Math.max(0, distanceM) / 1000;
     const minutes = Math.max(0, (opts && opts.durationS) || 0) / 60;
     const rate = opts && opts.intercity ? t.perKmIntercity : t.perKm;
-    const kmPart = Math.max(t.min, km * rate);
+    const kmPart = km * rate;
     const fromYandex = opts && typeof opts.jamS === 'number';
     const lost = fromYandex ? opts.jamS / 60 : minutes - (km / t.freeKmh) * 60;
     const jamMin = Math.max(0, Math.floor(lost));
     const jam = jamMin * t.jamPerMin;
-    const ride = Math.round((kmPart + jam) / 10) * 10;
+    const surge = (opts && opts.surge) || t.surge || 1;
+    const raw = (t.base + kmPart + jam) * surge;
+    const ride = Math.round(raw / 10) * 10;
     const ex = extras(t, opts);
     return {
       ride, ...ex, total: ride + ex.door,
-      kmPart: Math.round(kmPart), byMin: km * rate < t.min, jam, jamMin, jamSource: fromYandex ? 'yandex' : '2gis',
+      base: t.base, kmPart: Math.round(kmPart), surge, raw: Math.round(raw), jam, jamMin, jamSource: fromYandex ? 'yandex' : '2gis',
       km: Math.round(km * 10) / 10, minutes: Math.round(minutes), rate, intercity: !!(opts && opts.intercity)
     };
   }
@@ -66,7 +70,7 @@
     return { exitPick, exitDrop, door: exitPick + exitDrop };
   }
 
-  // Цена, когда маршрут посчитать нельзя: минимум плюс опции.
+  // Цена, когда маршрут посчитать нельзя: подача плюс опции.
   function minPrice(tariffId, opts) {
     const t = TARIFFS[tariffId];
     const ex = extras(t, opts);
