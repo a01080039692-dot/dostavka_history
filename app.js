@@ -1378,7 +1378,7 @@
             <section class="block">
               <h2>Что забрать или купить</h2>
               <div class="form">
-                <div class="field"><textarea name="what" aria-label="Описание" placeholder="Например: забрать готовый заказ на имя Магомед — или купить 2 кг говядины на кости"></textarea></div>
+                <div class="field"><textarea name="what" aria-label="Описание" placeholder="Например: забрать готовый заказ на имя Ахмад — или купить 2 кг говядины на кости"></textarea></div>
                 <div class="field"><label for="s-rphone">Телефон получателя, если это не вы</label><input id="s-rphone" name="rphone" type="tel" placeholder="+7 900 000-00-00"></div>
               </div>
             </section>
