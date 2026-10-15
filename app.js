@@ -571,7 +571,7 @@
           <span class="promo-emoji" aria-hidden="true">🥙</span>
         </section>
         <section class="services" aria-label="Услуги курьера">
-          <a class="service" href="#/send/courier"><span class="service-icon" aria-hidden="true">🛵</span><span><b>Курьер</b><small>Забрать или купить в заведении из каталога — от ${rub(COURIER.min)}, ${fmtRate(COURIER.perKm)} ₽/км</small></span></a>
+          <a class="service" href="#/send/courier"><span class="service-icon" aria-hidden="true">🛵</span><span><b>Курьер</b><small>Забрать в заведении из каталога и привезти — от ${rub(COURIER.min)}, ${fmtRate(COURIER.perKm)} ₽/км</small></span></a>
         </section>
         <nav class="cats" id="chips" aria-label="Категории">
           ${Object.entries(CATEGORIES).map(([k, v]) => `
@@ -716,7 +716,7 @@
         <h2>Меню пока нет</h2>
         <p class="muted">Заведение ещё не добавило меню, поэтому заказать здесь нельзя. Узнайте ассортимент у заведения или попросите курьера привезти.</p>
         <div class="order-actions">
-          <a class="btn btn-primary" href="#/send/buy/${esc(p.id)}">${COURIER.icon} Доставка</a>
+          <a class="btn btn-primary" href="#/send/courier/${esc(p.id)}">${COURIER.icon} Доставка</a>
           ${phone ? `<a class="btn" href="tel:+${esc(waPhone(phone))}">Позвонить</a>
           <a class="btn" href="https://wa.me/${esc(waPhone(phone))}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
         </div>
@@ -1122,7 +1122,7 @@
       <span class="addr-card-icon" aria-hidden="true">🏪</span>
       <span class="addr-card-text">${a
         ? `<b>${esc(a.label)}</b><small>${esc([a.city, a.sub].filter(Boolean).join(', '))}</small>`
-        : '<b>Откуда забрать или где купить?</b><small>Заведение из нашего каталога</small>'}</span>
+        : '<b>Откуда забрать?</b><small>Заведение из нашего каталога</small>'}</span>
       <span class="addr-card-go" aria-hidden="true">›</span>
     </button>`;
   }
@@ -1353,7 +1353,7 @@
     location.hash = '#/orders/' + order.id;
   }
 
-  // ---------- Курьер и «Купим и привезём» ----------
+  // ---------- Курьер: доставка из заведения каталога ----------
   const sendDraft = { from: null, to: null };
 
   function renderSend(preset, placeId) {
@@ -1376,9 +1376,9 @@
               </div>
             </section>
             <section class="block">
-              <h2>Что забрать или купить</h2>
+              <h2>Что забрать</h2>
               <div class="form">
-                <div class="field"><textarea name="what" aria-label="Описание" placeholder="Например: забрать готовый заказ на имя Ахмад — или купить 2 кг говядины на кости"></textarea></div>
+                <div class="field"><textarea name="what" aria-label="Описание" placeholder="Например: забрать готовый заказ на имя Ахмад"></textarea></div>
                 <div class="field"><label for="s-rphone">Телефон получателя, если это не вы</label><input id="s-rphone" name="rphone" type="tel" placeholder="+7 900 000-00-00"></div>
               </div>
             </section>
@@ -1419,8 +1419,6 @@
     updateSendQuote();
   }
 
-  // Галочку «Курьер должен купить» убрали 15.10.2026: новые заказы курьера — без отдельной покупки.
-  const sendPurchase = () => false;
 
   async function sendQuote() {
     const { from, to } = sendDraft;
@@ -1435,7 +1433,7 @@
     const noPoint = sendDraft.from && sendDraft.to && !sendDraft.from.coords;
     $('#sendQuote').innerHTML = tariffCardHtml(COURIER, q, q ? '' : noPoint ? 'У заведения нет точки на карте — точную стоимость назовёт курьер.' : 'Укажите обе точки — посчитаем по маршруту.');
     $('#sendTotal').innerHTML = q
-      ? `<div class="totals"><div><span>Доставка</span><span>${rub(q.price.total)}</span></div>${sendPurchase() ? '<div><span>Покупка</span><span>по чеку</span></div>' : ''}</div>`
+      ? `<div class="totals"><div><span>Доставка</span><span>${rub(q.price.total)}</span></div></div>`
       : `<p class="hint">Стоимость — от ${rub(COURIER.min)}, ${fmtRate(COURIER.perKm)} ₽/км по городу.</p>`;
     $('#sendSum').textContent = q ? rub(q.price.total) : '';
   }
@@ -1445,10 +1443,9 @@
     const form = e.target;
     const f = new FormData(form);
     const v = (k) => String(f.get(k) || '').trim();
-    const purchase = sendPurchase();
-    if (!sendDraft.from || !sendDraft.from.placeId) return formError(purchase ? 'Выберите заведение, где купить.' : 'Выберите заведение, откуда забрать.');
+    if (!sendDraft.from || !sendDraft.from.placeId) return formError('Выберите заведение, откуда забрать.');
     if (!sendDraft.to) return formError('Укажите, куда привезти.');
-    if (!v('what')) return formError(purchase ? 'Напишите, что купить.' : 'Напишите, что забрать.');
+    if (!v('what')) return formError('Напишите, что забрать.');
     if (!v('name')) return formError('Укажите имя.');
     if (v('phone').replace(/\D/g, '').length < 10) return formError('Укажите телефон.');
     if (v('when') === 'time' && !v('time')) return formError('Укажите время.');
@@ -1468,10 +1465,8 @@
       number: String(createdAt).slice(-5),
       type: 'courier',
       tariff: 'courier',
-      purchase,
       city: from.city || state.city,
       what: v('what'),
-      budget: '',
       recipientPhone: v('rphone'),
       placePhone: (() => { const pl = from.placeId && placeById(from.placeId); return (pl && pl.phones && pl.phones[0]) || ''; })(),
       items: [],
@@ -1515,7 +1510,6 @@
 
   function orderTitle(o) {
     if (o.type === 'food') return o.placeName;
-    if (o.type === 'buy') return 'Купим и привезём';
     return 'Курьер';
   }
 
@@ -1639,7 +1633,7 @@
           <div class="route-point"><span class="dot dot-a">A</span><div><b>${esc(o.from.label)}</b><small>${esc(o.from.sub || o.from.city || '')}</small></div></div>
           <div class="route-point"><span class="dot dot-b">B</span><div><b>${esc(o.to.label)}</b><small>${esc([o.to.flat && 'кв. ' + o.to.flat, o.to.entrance && 'подъезд ' + o.to.entrance, o.to.floor && 'этаж ' + o.to.floor].filter(Boolean).join(', ') || o.to.city || '')}</small></div></div>
         </div>
-        ${o.what ? `<p class="order-items"><b>${o.type === 'buy' || o.purchase ? 'Купить' : 'Забрать'}:</b> ${esc(o.what)}${o.budget ? ` · до ${esc(o.budget)} ₽` : ''}</p>` : ''}
+        ${o.what ? `<p class="order-items"><b>Забрать:</b> ${esc(o.what)}</p>` : ''}
         ${o.items.length ? `<p class="order-items">${o.items.map((i) => `${esc(i.name)} × ${i.qty}`).join(', ')}</p>` : ''}
       </div>
       <div class="totals">
@@ -1648,7 +1642,6 @@
         ${p.exitPick ? `<div><span>Выйти, забрать</span><span>${rub(p.exitPick)}</span></div>` : ''}
         ${p.exitDrop ? `<div><span>Выйти, отдать</span><span>${rub(p.exitDrop)}</span></div>` : ''}
         ${p.door && !p.exitPick && !p.exitDrop ? `<div><span>Курьер к двери</span><span>${rub(p.door)}</span></div>` : ''}
-        ${o.type === 'buy' || o.purchase ? '<div><span>Покупка</span><span>по чеку</span></div>' : ''}
         <div class="total"><span>Итого</span><span>${rub(o.total)}</span></div>
         <div class="muted" style="font-size:13px">${esc(PAYMENT[o.payment] || '')}</div>
       </div>
@@ -1804,14 +1797,14 @@
         if (d.pickPoint === 'to') setAddress(addr);
         // Форма перерисовывается — сохраняем то, что уже введено.
         const ids = ['s-rphone', 's-name', 's-phone'];
-        const keep = { what: ($('textarea[name="what"]') || {}).value || '', purchase: sendPurchase() };
+        const keep = { what: ($('textarea[name="what"]') || {}).value || '' };
         ids.forEach((id) => { const el = document.getElementById(id); if (el) keep[id] = el.value; });
-        renderSend(keep.purchase ? 'buy' : 'courier');
+        renderSend('courier');
         $('textarea[name="what"]').value = keep.what;
         ids.forEach((id) => { if (keep[id] !== undefined) document.getElementById(id).value = keep[id]; });
       };
       if (d.pickPoint === 'from') {
-        placePicker.open({ title: sendPurchase() ? 'Где купить?' : 'Откуда забрать?', value: sendDraft.from, onDone });
+        placePicker.open({ title: 'Откуда забрать?', value: sendDraft.from, onDone });
       } else {
         picker.open({ title: 'Куда привезти?', value: sendDraft.to, details: true, onDone });
       }

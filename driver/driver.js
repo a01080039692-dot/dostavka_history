@@ -117,7 +117,7 @@
           <div><b>${esc(typeLabel(x.o))}</b><small>${esc(new Date(x.d.deliveredAt).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))} · ${esc(x.o.from.label)} → ${esc(x.o.to.label)}</small></div>
           <b>${rub(earning(x))}</b>
         </div>`).join('') : '<p class="empty">Выполненных заказов пока нет</p>'}
-      <p class="hint">Заработок — стоимость доставки и платного ожидания. Деньги за товары передаются заведению или идут на покупку.</p>`;
+      <p class="hint">Заработок — стоимость доставки и платного ожидания. Деньги за товары передаются заведению.</p>`;
     $('#historyModal').showModal();
   }
 
@@ -212,7 +212,6 @@
   // ---------- Действия с заказом ----------
   function typeLabel(o) {
     if (o.type === 'food') return 'Заказ из ' + o.placeName;
-    if (o.type === 'buy' || o.purchase) return 'Купить и привезти';
     return 'Курьер: забрать и привезти';
   }
 
@@ -314,7 +313,7 @@
 
   function offerCardHtml(o) {
     const toA = o.from.coords ? DL.haversine(state.pos, o.from.coords) * 1.35 : null;
-    const kind = o.type === 'food' ? '🍽 Из заведения' : o.purchase || o.type === 'buy' ? '🛍️ Купить' : '📦 Посылка';
+    const kind = o.type === 'food' ? '🍽 Из заведения' : '📦 Курьер';
     return `
       <article class="d-offer">
         <div class="d-offer-top">
@@ -340,7 +339,7 @@
     return `
       <div class="track-block d-details">
         ${o.items && o.items.length ? `<div><b>Состав</b><ul class="d-items">${o.items.map((i) => `<li>${esc(i.name)} × ${i.qty}<span>${rub(i.price * i.qty)}</span></li>`).join('')}</ul></div>` : ''}
-        ${o.what ? `<p><b>${o.purchase || o.type === 'buy' ? 'Купить' : 'Забрать'}:</b> ${esc(o.what)}${o.budget ? ` · до ${esc(o.budget)} ₽` : ''}</p>` : ''}
+        ${o.what ? `<p><b>Забрать:</b> ${esc(o.what)}</p>` : ''}
         ${toLine ? `<p><b>Адрес:</b> ${esc(to.label)}, ${esc(toLine)}</p>` : ''}
         ${to.courier ? `<p><b>Курьеру:</b> ${esc(to.courier)}</p>` : ''}
         ${o.comment ? `<p><b>Комментарий:</b> ${esc(o.comment)}</p>` : ''}
@@ -366,7 +365,7 @@
         <div class="d-collect">
           <span>Получите с клиента</span>
           <b>${rub(d.collect || collectSum(o, d))}</b>
-          <small>${esc(PAYMENT[o.payment] || '')}${o.purchase || o.type === 'buy' ? ' · плюс сумма покупки по чеку' : ''}</small>
+          <small>${esc(PAYMENT[o.payment] || '')}</small>
         </div>
         <div class="totals">
           ${o.subtotal ? `<div><span>Товары</span><span>${rub(o.subtotal)}</span></div>` : ''}
@@ -383,7 +382,7 @@
     };
     const mainBtn = {
       accepted: '<button class="btn btn-primary btn-block" type="button" data-act="arrived">Я на месте</button>',
-      arrived: `<button class="btn btn-primary btn-block" type="button" data-act="picked">${o.purchase || o.type === 'buy' ? 'Купил, еду к клиенту' : 'Забрал заказ'}</button>`,
+      arrived: `<button class="btn btn-primary btn-block" type="button" data-act="picked">Забрал заказ</button>`,
       picked: '<button class="btn btn-primary btn-block" type="button" data-act="delivered">Доставил</button>'
     }[st];
     return `
