@@ -716,7 +716,7 @@
         <h2>Меню пока нет</h2>
         <p class="muted">Заведение ещё не добавило меню, поэтому заказать здесь нельзя. Узнайте ассортимент у заведения или попросите курьера купить и привезти.</p>
         <div class="order-actions">
-          <a class="btn btn-primary" href="#/send/buy/${esc(p.id)}">Доставка</a>
+          <a class="btn btn-primary" href="#/send/buy/${esc(p.id)}">${COURIER.icon} Доставка</a>
           ${phone ? `<a class="btn" href="tel:+${esc(waPhone(phone))}">Позвонить</a>
           <a class="btn" href="https://wa.me/${esc(waPhone(phone))}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
         </div>
