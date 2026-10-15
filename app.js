@@ -1524,7 +1524,7 @@
   // Заказ ведёт водитель из приложения (dispatchMode 'driver') или демо-курьер сайта.
   function orderProgress(o) {
     if (o.dispatchMode === 'driver') return DL.progressLive(o, BUS.dispatchOf(o.id), BUS.driver());
-    return orderProgress(o);
+    return DL.progress(o);
   }
 
   const fmtTime = (ms) => new Date(ms).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
