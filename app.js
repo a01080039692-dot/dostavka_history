@@ -73,9 +73,8 @@
     // Адрес доставки: { label, full, city, coords, flat, entrance, floor, intercom, courier }
     address: store.get('address', null),
     quote: null,
-    // Опции курьера: «Выйти, забрать» и «Выйти, отдать».
-    exitPick: store.get('exitPick', false),
-    exitDrop: store.get('exitDrop', false)
+    // Опция «Курьер к двери».
+    door: store.get('door', false)
   };
 
   // Сохранённые город и корзина могли остаться от города, который отключили.
@@ -245,10 +244,10 @@
     const p = placeById(state.cart.placeId);
     const a = state.address;
     if (!p || !p.coords || !a || !a.coords) return null;
-    return p.id + '|' + a.coords.join(',') + '|' + (state.exitPick ? 1 : 0) + (state.exitDrop ? 1 : 0);
+    return p.id + '|' + a.coords.join(',') + '|' + (state.door ? 1 : 0);
   }
 
-  const exitOpts = () => ({ exitPick: state.exitPick, exitDrop: state.exitDrop });
+  const exitOpts = () => ({ door: state.door });
 
   function currentQuote() {
     const k = quoteKey();
@@ -1183,12 +1182,10 @@
         ${p.jam ? `<div><span>Пробки${p.jamSource === 'yandex' ? ' (Яндекс Карты)' : ''}: +${p.jamMin} мин × ${tariff.jamPerMin} ₽</span><span>${rub(p.jam)}</span></div>` : ''}
         ${p.surge && p.surge !== 1 ? `<div><span>Повышенный спрос × ${fmtRate(p.surge)}</span><span>${rub(p.raw)}</span></div>` : ''}
         <div><span>Поездка, с округлением до 10 ₽</span><span>${rub(p.ride)}</span></div>
-        ${p.exitPick ? `<div><span>Выйти, забрать</span><span>${rub(p.exitPick)}</span></div>` : ''}
-        ${p.exitDrop ? `<div><span>Выйти, отдать</span><span>${rub(p.exitDrop)}</span></div>` : ''}
+        ${p.door ? `<div><span>Курьер к двери</span><span>${rub(p.door)}</span></div>` : ''}
       </div>` : ''}
       <div class="options">
-        ${optionSwitchHtml('exitPick', 'Выйти, забрать', 'Курьер зайдёт за отправлением, а не будет ждать у входа', tariff.exitPickFee)}
-        ${optionSwitchHtml('exitDrop', 'Выйти, отдать', 'Курьер поднимется и отдаст в руки', tariff.exitDropFee)}
+        ${optionSwitchHtml('door', 'Курьер к двери', 'Поднимется и отдаст в руки', tariff.doorFee)}
       </div>
       <p class="hint">${tariff.freeWaitMin} мин ожидания бесплатно, дальше ${tariff.waitPerMin} ₽/мин. ${extra || ''}</p>`;
   }
@@ -1559,6 +1556,7 @@
       to.courier ? `Курьеру: ${to.courier}` : '',
       o.delivery && o.delivery.price && o.delivery.price.exitPick ? 'Курьер выйдет и заберёт' : '',
       o.delivery && o.delivery.price && o.delivery.price.exitDrop ? 'Курьер выйдет и отдаст в руки' : '',
+      o.delivery && o.delivery.price && o.delivery.price.door && !o.delivery.price.exitPick && !o.delivery.price.exitDrop ? 'Курьер к двери: поднимется и отдаст в руки' : '',
       to.coords ? `Точка на карте 2ГИС: ${twoGisPointUrl(to.city || o.city, to.coords)}` : '',
       `Когда: ${o.scheduledAt ? 'к ' + fmtTime(o.scheduledAt) : 'как можно скорее'}`,
       `Оплата: ${PAYMENT[o.payment]}`,

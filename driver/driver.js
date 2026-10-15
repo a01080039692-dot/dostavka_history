@@ -20,10 +20,11 @@
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[c]));
   }
-  // Опции, которые заказал клиент: курьер заходит за отправлением и/или отдаёт в руки.
+  // Опции, которые заказал клиент: «Курьер к двери» (в старых заказах — «Выйти, забрать/отдать»).
   function exitText(o) {
     const p = (o.delivery && o.delivery.price) || {};
-    return [p.exitPick && 'выйти, забрать', p.exitDrop && 'выйти, отдать'].filter(Boolean).join(', ');
+    if (p.exitPick || p.exitDrop) return [p.exitPick && 'выйти, забрать', p.exitDrop && 'выйти, отдать'].filter(Boolean).join(', ');
+    return p.door ? 'курьер к двери — подняться и отдать в руки' : '';
   }
 
   const rub = (n) => Math.round(n).toLocaleString('ru-RU') + ' ₽';
