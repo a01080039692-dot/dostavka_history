@@ -1361,7 +1361,6 @@
     const fromPlace = placeId && placeById(placeId);
     if (fromPlace) sendDraft.from = placePoint(fromPlace);
     const c = customer();
-    const purchase = preset === 'buy';
     if (!sendDraft.to && state.address) sendDraft.to = { ...state.address };
     $('#view').innerHTML = `
       <div class="wrap page">
@@ -1380,8 +1379,6 @@
               <h2>Что забрать или купить</h2>
               <div class="form">
                 <div class="field"><textarea name="what" aria-label="Описание" placeholder="Например: забрать готовый заказ на имя Магомед — или купить 2 кг говядины на кости"></textarea></div>
-                <label class="check" style="margin-top:0"><input type="checkbox" id="purchaseOpt" name="purchase" ${purchase ? 'checked' : ''}> Курьер должен купить</label>
-                <div class="field" id="budgetField" ${purchase ? '' : 'hidden'}><label for="s-budget">Примерная сумма покупки, ₽</label><input id="s-budget" name="budget" inputmode="numeric" placeholder="Например, 1500"><span class="hint">Покупку оплачиваете курьеру при получении вместе с доставкой.</span></div>
                 <div class="field"><label for="s-rphone">Телефон получателя, если это не вы</label><input id="s-rphone" name="rphone" type="tel" placeholder="+7 900 000-00-00"></div>
               </div>
             </section>
@@ -1418,12 +1415,12 @@
       </div>`;
     $('#view').dataset.kind = 'courier';
     bindWhen('s');
-    $('#purchaseOpt').addEventListener('change', (e) => { $('#budgetField').hidden = !e.target.checked; updateSendQuote(); });
     $('#sendForm').addEventListener('submit', submitSend);
     updateSendQuote();
   }
 
-  const sendPurchase = () => !!($('#purchaseOpt') && $('#purchaseOpt').checked);
+  // Галочку «Курьер должен купить» убрали 15.10.2026: новые заказы курьера — без отдельной покупки.
+  const sendPurchase = () => false;
 
   async function sendQuote() {
     const { from, to } = sendDraft;
@@ -1474,7 +1471,7 @@
       purchase,
       city: from.city || state.city,
       what: v('what'),
-      budget: purchase ? v('budget') : '',
+      budget: '',
       recipientPhone: v('rphone'),
       placePhone: (() => { const pl = from.placeId && placeById(from.placeId); return (pl && pl.phones && pl.phones[0]) || ''; })(),
       items: [],
@@ -1806,7 +1803,7 @@
         sendDraft[d.pickPoint] = addr;
         if (d.pickPoint === 'to') setAddress(addr);
         // Форма перерисовывается — сохраняем то, что уже введено.
-        const ids = ['s-budget', 's-rphone', 's-name', 's-phone'];
+        const ids = ['s-rphone', 's-name', 's-phone'];
         const keep = { what: ($('textarea[name="what"]') || {}).value || '', purchase: sendPurchase() };
         ids.forEach((id) => { const el = document.getElementById(id); if (el) keep[id] = el.value; });
         renderSend(keep.purchase ? 'buy' : 'courier');
