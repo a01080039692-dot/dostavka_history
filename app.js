@@ -264,7 +264,7 @@
     DL.route(p.coords, a.coords, { traffic: true }).then((r) => {
       if (quotePending === k) quotePending = null;
       if (quoteKey() !== k) return;
-      state.quote = { key: k, route: r, price: DL.price('courier', r.distance, { durationS: r.duration, jamS: r.jamS, ...exitOpts(), intercity: DL.isIntercity(p, a) }) };
+      state.quote = { key: k, route: r, price: DL.price('courier', r.distance, { durationS: r.duration, jamS: r.jamS, ...exitOpts(), intercity: DL.isIntercity(p, a), from: p.coords }) };
       renderCartIndicators();
       refreshAfterCartChange(null, null);
     });
@@ -346,6 +346,17 @@
   }
 
   const fmtRate = (n) => n.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
+  // Почему коэффициент выше 1: намаз, время суток, погода, пробки — для строки в разбивке цены.
+  function surgeReason(p) {
+    const s = p && p.surgeInfo;
+    if (!s || !s.auto) return '';
+    const parts = [];
+    if (s.prayer && s.prayer.intensity > 0) parts.push('пятничный намаз');
+    else if (s.period && s.period !== 'Обычное время') parts.push(s.period.toLowerCase());
+    if (s.weather && s.weather !== 'Ясно или облачно') parts.push(s.weather.toLowerCase());
+    if (s.trafficScore >= 3) parts.push('пробки ' + s.trafficScore + ' из 10');
+    return parts.join(', ');
+  }
   const fmtKm = (m) => (m / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' км';
   const fmtMin = (s) => Math.max(1, Math.round(s / 60)) + ' мин';
 
@@ -1179,9 +1190,9 @@
       ${p ? `<div class="breakdown">
         <div><span>Подача</span><span>${rub(p.base)}</span></div>
         <div><span>${fmtKm(q.route.distance)} × ${fmtRate(p.rate)} ₽${p.intercity ? ' (между городами)' : ''}</span><span>${rub(p.kmPart)}</span></div>
-        ${p.jam ? `<div><span>Пробки${p.jamSource === 'yandex' ? ' (Яндекс Карты)' : ''}: +${p.jamMin} мин × ${tariff.jamPerMin} ₽</span><span>${rub(p.jam)}</span></div>` : ''}
-        ${p.surge && p.surge !== 1 ? `<div><span>Повышенный спрос × ${fmtRate(p.surge)}</span><span>${rub(p.raw)}</span></div>` : ''}
+        ${p.surge && p.surge !== 1 ? `<div><span>Динамический коэффициент × ${fmtRate(p.surge)}${surgeReason(p) ? ` <small>(${esc(surgeReason(p))})</small>` : ''}</span><span>${rub(p.raw)}</span></div>` : ''}
         <div><span>Поездка, с округлением до 10 ₽</span><span>${rub(p.ride)}</span></div>
+        ${p.waitPart ? `<div><span>Ожидание: ${p.paidWaitMin} мин × ${fmtRate(tariff.waitPerMin)} ₽</span><span>${rub(p.waitPart)}</span></div>` : ''}
         ${p.door ? `<div><span>Курьер к двери</span><span>${rub(p.door)}</span></div>` : ''}
       </div>` : ''}
       <div class="options">
@@ -1320,7 +1331,7 @@
     const createdAt = Date.now();
     const { route, approach } = await buildRoutes(from, to, createdAt);
     const priceD = route
-      ? DL.price('courier', route.distance, { durationS: route.duration, jamS: route.jamS, ...exitOpts(), intercity: DL.isIntercity(place, to) })
+      ? DL.price('courier', route.distance, { durationS: route.duration, jamS: route.jamS, ...exitOpts(), intercity: DL.isIntercity(place, to), from: from.coords })
       : DL.minPrice('courier', exitOpts());
     const subtotal = cartTotals().subtotal;
     const order = {
@@ -1424,7 +1435,7 @@
     const { from, to } = sendDraft;
     if (!from || !to || !from.coords || !to.coords) return null;
     const r = await DL.route(from.coords, to.coords, { traffic: true });
-    return { route: r, price: DL.price('courier', r.distance, { durationS: r.duration, jamS: r.jamS, ...exitOpts(), intercity: DL.isIntercity(from, to) }) };
+    return { route: r, price: DL.price('courier', r.distance, { durationS: r.duration, jamS: r.jamS, ...exitOpts(), intercity: DL.isIntercity(from, to), from: from.coords }) };
   }
 
   async function updateSendQuote() {
@@ -1458,7 +1469,7 @@
     const to = { ...sendDraft.to };
     const { route, approach } = await buildRoutes(from, to, createdAt);
     const priceD = route
-      ? DL.price('courier', route.distance, { durationS: route.duration, jamS: route.jamS, ...exitOpts(), intercity: DL.isIntercity(from, to) })
+      ? DL.price('courier', route.distance, { durationS: route.duration, jamS: route.jamS, ...exitOpts(), intercity: DL.isIntercity(from, to), from: from.coords })
       : DL.minPrice('courier', exitOpts());
     const order = {
       id: 'o' + createdAt.toString(36),

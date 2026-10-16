@@ -15,9 +15,12 @@
   // ---------- Тариф ----------
   // Тариф один — «Курьер»: доставка из заведения и из точки, выбранной в каталоге, до клиента.
   // Как у «Такси Анжи»: подача 100 ₽ + 28 ₽ за км по городу (33 ₽ между городами), 3 минуты ожидания
-  // бесплатно, дальше 7 ₽/мин. Динамический коэффициент (surge) пока 1 — его зададим позже. Пробки — надбавкой jamPerMin за каждую минуту, потерянную в пробках. Сколько минут
-  // теряется, берём у Яндекс Карт (время с пробками минус время без пробок), а без ключа Яндекса —
-  // из маршрута 2ГИС: сколько он едет дольше, чем со средней скоростью без пробок (freeKmh).
+  // бесплатно, дальше 7 ₽/мин. Подача и километры умножаются на динамический коэффициент (surge) из
+  // surge-engine.js: он зависит от зоны подачи, времени, пятничного намаза, погоды и пробок.
+  // Платное ожидание прибавляется сверху, без коэффициента. Пробки отдельной надбавкой
+  // больше не берём — они входят в коэффициент. Сколько минут теряется в пробках, по-прежнему берём
+  // у Яндекс Карт (время с пробками минус без пробок), а без ключа Яндекса — из маршрута 2ГИС
+  // (сколько он едет дольше, чем со средней скоростью без пробок freeKmh).
   const TARIFFS = {
     courier: {
       id: 'courier',
@@ -25,11 +28,11 @@
       icon: '🛵',
       about: 'Доставим заказ из заведения до двери',
       base: 100,            // подача — прибавляется к каждой поездке
-      surge: 1,             // динамический коэффициент спроса: умножает подачу, километры и пробки
+      surge: 1,             // запасной коэффициент, если surge-engine.js не подключён или нет точки подачи
       perKm: 28,            // по городу
       perKmIntercity: 33,   // между городами: точки A и B в разных городах (Махачкала ↔ Каспийск)
       freeKmh: 30,          // средняя скорость по городу без пробок
-      jamPerMin: 7,         // надбавка за минуту, потерянную в пробках
+      jamPerMin: 7,         // больше не используется: пробки теперь входят в коэффициент surge
       doorFee: 50,          // «Курьер к двери» — поднимется и отдаст в руки
       freeWaitMin: 3,
       waitPerMin: 7
@@ -39,8 +42,58 @@
   // Старые заказы (до 15.10.2026) могли ссылаться на тариф «buy» — считаем их по «Курьеру».
   TARIFFS.buy = TARIFFS.courier;
 
-  // Стоимость: (подача + километры по городской или междугородней ставке + надбавка за пробки) × коэффициент,
-  // округление до ближайших 10 ₽. Опция «Курьер к двери» — сверху.
+  // ---------- Динамический коэффициент (surge-engine.js) ----------
+  // surge-engine.js нужно подключить на странице раньше этого файла. Без него коэффициент = t.surge (1).
+  const SURGE = window.SurgeEngine ? window.SurgeEngine.create(CONFIG.surge) : null;
+  if (!SURGE) console.warn('surge-engine.js не подключён — динамический коэффициент считаем равным 1');
+
+  // Погода для коэффициента: Open-Meteo, без ключа, обновляем раз в 10 минут.
+  // Пока погода не загрузилась, считаем «ясно».
+  const WX = { key: 'clear', tempC: null, at: 0 };
+  function loadWeather() {
+    if (!SURGE || typeof fetch === 'undefined') return;
+    const c = SURGE.config.center;
+    fetch('https://api.open-meteo.com/v1/forecast?latitude=' + c.lat + '&longitude=' + c.lon +
+      '&current=temperature_2m,precipitation,weather_code&timezone=Europe%2FMoscow')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+      .then((d) => {
+        WX.key = window.SurgeEngine.weatherFromOpenMeteo(d.current);
+        WX.tempC = d.current.temperature_2m;
+        WX.at = Date.now();
+      })
+      .catch((e) => console.warn('Погода недоступна, коэффициент считаем как при ясной погоде:', e));
+  }
+  loadWeather();
+  if (SURGE) setInterval(loadWeather, 10 * 60000);
+
+  // Коэффициент для поездки. Нужна точка подачи opts.from — [lat, lon] или { lat, lon }.
+  // Балл пробок 0–10 считаем из тех же минут, потерянных в пробках, что раньше шли в надбавку.
+  function surgeFor(t, km, minutes, lostMin, opts) {
+    const from = opts && opts.from;
+    if (!SURGE || !from) return { k: t.surge || 1, auto: false };
+    const lat = Array.isArray(from) ? from[0] : from.lat;
+    const lon = Array.isArray(from) ? from[1] : (from.lon != null ? from.lon : from.lng);
+    if (typeof lat !== 'number' || typeof lon !== 'number') return { k: t.surge || 1, auto: false };
+    const freeMin = (km / t.freeKmh) * 60;
+    const trafficScore = freeMin > 0
+      ? window.SurgeEngine.trafficScoreFromTimes((freeMin + Math.max(0, lostMin)) * 60, freeMin * 60)
+      : 0;
+    const q = SURGE.quote({
+      from: { lat, lon }, distanceKm: km, durationMin: minutes, durationIsFreeFlow: false,
+      date: (opts && opts.date) || new Date(), weather: WX.key, trafficScore, trafficIsLive: true
+    });
+    return {
+      k: q.k, auto: true, trafficScore, weather: q.weatherName, tempC: WX.tempC,
+      period: q.periodName, prayer: q.prayer, outsideArea: q.outsideArea
+    };
+  }
+
+  // Стоимость: (подача + километры по городской или междугородней ставке) × коэффициент,
+  // округление до ближайших 10 ₽. Платное ожидание и опция «Курьер к двери» — сверху, без коэффициента.
+  // opts: durationS, jamS, intercity, door — как раньше;
+  //       from — точка подачи [lat, lon] (нужна для коэффициента);
+  //       waitMin — сколько минут курьер ждал (первые freeWaitMin бесплатно);
+  //       date — время заказа (по умолчанию сейчас); surge — задать коэффициент вручную.
   function price(tariffId, distanceM, opts) {
     const t = TARIFFS[tariffId];
     const km = Math.max(0, distanceM) / 1000;
@@ -50,14 +103,19 @@
     const fromYandex = opts && typeof opts.jamS === 'number';
     const lost = fromYandex ? opts.jamS / 60 : minutes - (km / t.freeKmh) * 60;
     const jamMin = Math.max(0, Math.floor(lost));
-    const jam = jamMin * t.jamPerMin;
-    const surge = (opts && opts.surge) || t.surge || 1;
-    const raw = (t.base + kmPart + jam) * surge;
+    const waitMin = Math.max(0, (opts && opts.waitMin) || 0);
+    const paidWaitMin = Math.max(0, Math.ceil(waitMin - t.freeWaitMin));
+    const waitPart = paidWaitMin * t.waitPerMin;
+    const surgeInfo = surgeFor(t, km, minutes, lost, opts);
+    const surge = (opts && opts.surge) || surgeInfo.k || 1;
+    const raw = (t.base + kmPart) * surge;
     const ride = Math.round(raw / 10) * 10;
     const ex = extras(t, opts);
     return {
-      ride, ...ex, total: ride + ex.door,
-      base: t.base, kmPart: Math.round(kmPart), surge, raw: Math.round(raw), jam, jamMin, jamSource: fromYandex ? 'yandex' : '2gis',
+      ride, ...ex, total: ride + waitPart + ex.door,
+      base: t.base, kmPart: Math.round(kmPart), waitPart, waitMin, paidWaitMin,
+      surge, surgeInfo, raw: Math.round(raw),
+      jam: 0, jamMin, jamSource: fromYandex ? 'yandex' : '2gis',
       km: Math.round(km * 10) / 10, minutes: Math.round(minutes), rate, intercity: !!(opts && opts.intercity)
     };
   }
@@ -372,6 +430,8 @@
     TARIFFS, STAGES, price, minPrice, isIntercity, suggest, reverse, route, pointAt, courierStart, timeline, progress, progressLive,
     haversine, savedAddresses: loadSaved, rememberAddress,
     forgetAddress(i) { const l = loadSaved(); l.splice(i, 1); saveSaved(l); },
-    hasGeo: () => !!KEY
+    hasGeo: () => !!KEY,
+    weather: () => ({ ...WX }),
+    surgeEngine: SURGE
   };
 })();
