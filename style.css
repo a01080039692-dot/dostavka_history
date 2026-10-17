@@ -639,6 +639,10 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
 }
 .choice:has(input:checked) { box-shadow: 0 0 0 2px var(--accent) inset; }
 .choice input { accent-color: var(--accent); }
+/* Варианты внутри поля формы (транспорт водителя): радиокнопка своего размера, текст обычный, не серый. */
+.field .choice { font-size: 15px; color: var(--ink); }
+.field .choice input { flex: none; width: 20px; height: 20px; padding: 0; margin: 0; background: none; border-radius: 50%; }
+.field .choice input:focus { box-shadow: none; }
 .locate { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--accent); justify-self: start; }
 .summary { position: sticky; top: calc(var(--header-h) + 20px); }
 
