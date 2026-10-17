@@ -31,8 +31,9 @@
   const fmtKm = (m) => (m / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' км';
   const fmtMin = (s) => Math.max(1, Math.round(s / 60)) + ' мин';
   const digits = (p) => { let d = String(p || '').replace(/\D/g, ''); if (d.length === 11 && d[0] === '8') d = '7' + d.slice(1); return d; };
-  const TRANSPORT = { car: '🚗 Автомобиль', moto: '🛵 Мото/скутер', bike: '🚲 Велосипед', foot: '🚶 Пешком' };
-  const TRANSPORT_ICON = { car: '🚗', moto: '🛵', bike: '🚲', foot: '🚶' };
+  // Пеших курьеров нет — только транспорт.
+  const TRANSPORT = { car: '🚗 Автомобиль', moto: '🛵 Мото/скутер', bike: '🚲 Велосипед' };
+  const TRANSPORT_ICON = { car: '🚗', moto: '🛵', bike: '🚲' };
   const PAYMENT = { cash: 'Наличными', card: 'Картой', transfer: 'Переводом' };
   const CITY_SLUG = { 'Махачкала': 'makhachkala', 'Каспийск': 'kaspiysk' };
 
@@ -53,6 +54,8 @@
 
   // ---------- Состояние ----------
   const saved = BUS.driver() || {};
+  // Профиль, сохранённый с транспортом «Пешком», переводим на автомобиль.
+  if (saved.profile && !TRANSPORT[saved.profile.transport]) saved.profile = { ...saved.profile, transport: 'car' };
   const state = {
     profile: saved.profile || null,
     online: false,                         // на линию выходим заново при каждом открытии

@@ -1680,7 +1680,7 @@
     </div>`;
   }
 
-  const TRANSPORT_ICONS = { car: '🚗', moto: '🛵', bike: '🚲', foot: '🚶' };
+  const TRANSPORT_ICONS = { car: '🚗', moto: '🛵', bike: '🚲' };
 
   function ratingHtml(o) {
     const r = o.rating;
