@@ -16,11 +16,10 @@
   // Тариф один — «Курьер»: доставка из заведения и из точки, выбранной в каталоге, до клиента.
   // Как у «Такси Анжи»: подача 100 ₽ + 28 ₽ за км по городу (33 ₽ между городами), 3 минуты ожидания
   // бесплатно, дальше 7 ₽/мин. Подача и километры умножаются на динамический коэффициент (surge) из
-  // surge-engine.js: он зависит от зоны подачи, времени, пятничного намаза, погоды и пробок.
-  // Платное ожидание прибавляется сверху, без коэффициента. Пробки отдельной надбавкой
-  // больше не берём — они входят в коэффициент. Сколько минут теряется в пробках, по-прежнему берём
-  // у Яндекс Карт (время с пробками минус без пробок), а без ключа Яндекса — из маршрута 2ГИС
-  // (сколько он едет дольше, чем со средней скоростью без пробок freeKmh).
+  // surge-engine.js: он зависит только от погоды и пробок (ясно и без пробок — ровно 1).
+  // Платное ожидание прибавляется сверху, без коэффициента. Сколько минут теряется в пробках,
+  // берём у Яндекс Карт (время с пробками минус без пробок), а без ключа Яндекса — у 2ГИС:
+  // время маршрута сейчас минус время того же маршрута в 4 часа ночи, когда пробок нет.
   const TARIFFS = {
     courier: {
       id: 'courier',
@@ -31,7 +30,7 @@
       surge: 1,             // запасной коэффициент, если surge-engine.js не подключён или нет точки подачи
       perKm: 28,            // по городу
       perKmIntercity: 33,   // между городами: точки A и B в разных городах (Махачкала ↔ Каспийск)
-      freeKmh: 30,          // средняя скорость по городу без пробок
+      freeKmh: 30,          // скорость для оценки времени, когда маршрут 2ГИС недоступен
       jamPerMin: 7,         // больше не используется: пробки теперь входят в коэффициент surge
       doorFee: 50,          // «Курьер к двери» — поднимется и отдаст в руки
       freeWaitMin: 3,
@@ -67,24 +66,23 @@
   if (SURGE) setInterval(loadWeather, 10 * 60000);
 
   // Коэффициент для поездки. Нужна точка подачи opts.from — [lat, lon] или { lat, lon }.
-  // Балл пробок 0–10 считаем из тех же минут, потерянных в пробках, что раньше шли в надбавку.
+  // Балл пробок 0–10: во сколько раз поездка сейчас дольше, чем без пробок.
+  // lostMin — минуты, потерянные в пробках (null — неизвестно, тогда пробок не считаем).
   function surgeFor(t, km, minutes, lostMin, opts) {
     const from = opts && opts.from;
     if (!SURGE || !from) return { k: t.surge || 1, auto: false };
     const lat = Array.isArray(from) ? from[0] : from.lat;
     const lon = Array.isArray(from) ? from[1] : (from.lon != null ? from.lon : from.lng);
     if (typeof lat !== 'number' || typeof lon !== 'number') return { k: t.surge || 1, auto: false };
-    const freeMin = (km / t.freeKmh) * 60;
-    const trafficScore = freeMin > 0
-      ? window.SurgeEngine.trafficScoreFromTimes((freeMin + Math.max(0, lostMin)) * 60, freeMin * 60)
+    const lost = Math.max(0, lostMin || 0);
+    const freeMin = minutes - lost;
+    const trafficScore = lostMin != null && freeMin > 0
+      ? window.SurgeEngine.trafficScoreFromTimes(minutes * 60, freeMin * 60)
       : 0;
-    const q = SURGE.quote({
-      from: { lat, lon }, distanceKm: km, durationMin: minutes, durationIsFreeFlow: false,
-      date: (opts && opts.date) || new Date(), weather: WX.key, trafficScore, trafficIsLive: true
-    });
+    const q = SURGE.quote({ from: { lat, lon }, distanceKm: km, durationMin: minutes, weather: WX.key, trafficScore });
     return {
-      k: q.k, auto: true, trafficScore, weather: q.weatherName, tempC: WX.tempC,
-      period: q.periodName, prayer: q.prayer, outsideArea: q.outsideArea
+      k: q.k, auto: true, trafficScore, weather: q.weatherName, weatherKey: q.weather, tempC: WX.tempC,
+      factors: q.factors
     };
   }
 
@@ -100,9 +98,9 @@
     const minutes = Math.max(0, (opts && opts.durationS) || 0) / 60;
     const rate = opts && opts.intercity ? t.perKmIntercity : t.perKm;
     const kmPart = km * rate;
-    const fromYandex = opts && typeof opts.jamS === 'number';
-    const lost = fromYandex ? opts.jamS / 60 : minutes - (km / t.freeKmh) * 60;
-    const jamMin = Math.max(0, Math.floor(lost));
+    const hasJam = opts && typeof opts.jamS === 'number';
+    const lost = hasJam ? opts.jamS / 60 : null;
+    const jamMin = Math.max(0, Math.floor(lost || 0));
     const waitMin = Math.max(0, (opts && opts.waitMin) || 0);
     const paidWaitMin = Math.max(0, Math.ceil(waitMin - t.freeWaitMin));
     const waitPart = paidWaitMin * t.waitPerMin;
@@ -115,7 +113,7 @@
       ride, ...ex, total: ride + waitPart + ex.door,
       base: t.base, kmPart: Math.round(kmPart), waitPart, waitMin, paidWaitMin,
       surge, surgeInfo, raw: Math.round(raw),
-      jam: 0, jamMin, jamSource: fromYandex ? 'yandex' : '2gis',
+      jam: 0, jamMin, jamSource: hasJam ? (opts.jamSource || 'yandex') : 'none',
       km: Math.round(km * 10) / 10, minutes: Math.round(minutes), rate, intercity: !!(opts && opts.intercity)
     };
   }
@@ -211,7 +209,8 @@
     });
   }
 
-  // opts.traffic — узнать у Яндекса, сколько минут теряется в пробках (для расчёта цены).
+  // opts.traffic — узнать, сколько минут теряется в пробках (для расчёта цены):
+  // у Яндекса, а без его ключа — у 2ГИС (сейчас минус ночью).
   async function route(a, b, opts) {
     const traffic = !!(opts && opts.traffic);
     const key = a.join(',') + '>' + b.join(',') + (traffic ? '|t' : '');
@@ -248,15 +247,52 @@
         console.warn('Маршрут 2ГИС недоступен, считаем по прямой:', e);
       }
     }
+    const jam = traffic ? await yandexJam(a, b) : null;
+    if (jam) {
+      res.jamS = jam.jamS;
+      res.jamSource = 'yandex';
+    } else if (traffic && res && res.source === '2gis') {
+      const night = await nightDuration(a, b);
+      if (night) {
+        res.jamS = Math.max(0, res.duration - night);
+        res.jamSource = '2gis';
+        res.freeS = night;
+      }
+    }
     if (!res) {
       // Оценка без маршрутизатора: прямая × 1,35, скорость как без пробок — надбавки нет.
       const d = haversine(a, b) * 1.35;
       res = { distance: Math.round(d), duration: Math.round(d / (TARIFFS.courier.freeKmh * 1000 / 3600)), path: [a, b], source: 'estimate' };
     }
-    const jam = traffic ? await yandexJam(a, b) : null;
-    if (jam) res.jamS = jam.jamS;
     routeCache[key] = res;
     return res;
+  }
+
+  // ---------- Пробки (2ГИС): время того же маршрута в 4:00 ночи ----------
+  // 2ГИС не отдаёт время «без пробок», но по статистике знает, сколько едут в любой час.
+  // Ночью пробок нет — это время и берём за точку отсчёта. Берём ближайшую следующую ночь.
+  function nightDuration(a, b) {
+    const now = new Date();
+    const msk = new Date(now.getTime() + 3 * 3600000);
+    let at = Date.UTC(msk.getUTCFullYear(), msk.getUTCMonth(), msk.getUTCDate(), 4, 0) - 3 * 3600000;
+    if (at <= now.getTime()) at += 86400000;
+    const ask = fetch(ROUTING + '?key=' + KEY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        points: [{ type: 'stop', lat: a[0], lon: a[1] }, { type: 'stop', lat: b[0], lon: b[1] }],
+        transport: 'driving',
+        route_mode: 'fastest',
+        traffic_mode: 'statistics',
+        utc: Math.floor(at / 1000),
+        output: 'summary'
+      })
+    }).then((r) => r.json()).then((d) => {
+      const best = d.result && d.result[0];
+      return best && best.duration > 0 ? best.duration : null;
+    });
+    const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 6000));
+    return Promise.race([ask, timeout]).catch((e) => { console.warn('Время без пробок (2ГИС) недоступно:', e); return null; });
   }
 
   // ---------- Пробки (Яндекс Карты) ----------
