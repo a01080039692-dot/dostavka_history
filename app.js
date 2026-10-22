@@ -29,13 +29,10 @@
   const COURIER = DL.TARIFFS.courier;
 
 
-  // Города, где работает доставка. Заведения остальных городов остаются в data/places.js,
-  // но на сайте не показываются — чтобы подключить город, добавьте его сюда.
+  // Города, где работает доставка. Заведения других городов на сайте не показываются —
+  // чтобы подключить город, добавьте его сюда и его заведения в data/places.js.
   const ACTIVE_CITIES = ['Махачкала', 'Каспийск'];
   DATA.places = DATA.places.filter((p) => ACTIVE_CITIES.includes(p.city));
-
-  // Центр для городов без координат в каталоге.
-  const FALLBACK_CENTERS = { 'Хасавюрт': [43.2509, 46.5877] };
 
   const PAYMENT = {
     cash: 'Наличными курьеру',
@@ -118,17 +115,13 @@
   }
 
   function cityCenter(city) {
-    return DATA.cityCenters[city] || FALLBACK_CENTERS[city] || [43.0, 47.0];
+    return DATA.cityCenters[city] || [43.0, 47.0];
   }
 
   // Ссылки на 2ГИС работают без ключа API.
   const TWOGIS_CITY_SLUGS = {
     'Махачкала': 'makhachkala',
-    'Каспийск': 'kaspiysk',
-    'Дербент': 'derbent',
-    'Нальчик': 'nalchik',
-    'Сочи': 'sochi',
-    'Хасавюрт': 'khasavyurt'
+    'Каспийск': 'kaspiysk'
   };
 
   function twoGisBase(city) {
