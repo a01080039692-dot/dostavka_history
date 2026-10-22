@@ -59,6 +59,8 @@
 
   const state = {
     city: store.get('city', null),
+    // «Все города» на главной: каталог без фильтра по городу. Город доставки (state.city) не меняется.
+    allCities: store.get('allCities', false),
     category: 'all',
     query: '',
     view: 'grid',
@@ -487,7 +489,7 @@
   function filteredPlaces() {
     const q = state.query.trim().toLowerCase();
     let list = DATA.places.filter((p) => {
-      if (p.city !== state.city) return false;
+      if (!state.allCities && p.city !== state.city) return false;
       if (state.category === 'delivery' && !p.ownDelivery) return false;
       if (state.category !== 'all' && state.category !== 'delivery' && !p.categories.includes(state.category)) return false;
       if (!q) return true;
@@ -517,6 +519,7 @@
   function placeMeta(p) {
     const parts = [CATEGORIES[p.categories[0]], 'Доставка от ' + rub(COURIER.min)];
     if (state.userPos && p.coords) parts.push(distanceKm(state.userPos, p.coords).toFixed(1) + ' км');
+    else if (state.allCities) parts.push([p.city, p.address].filter(Boolean).join(', '));
     else parts.push(p.address || 'Адрес уточняется');
     return esc(parts.join(' · '));
   }
@@ -568,7 +571,7 @@
         <section class="promo">
           <div>
             <h1>Еда и продукты<br>с доставкой</h1>
-            <p>Рестораны, фастфуд, кофейни и мясные магазины ${esc(state.city === 'Каспийск' ? 'Каспийска' : 'Махачкалы')} — только из проверенного каталога.</p>
+            <p>Рестораны, фастфуд, кофейни и мясные магазины ${esc(state.allCities ? 'Махачкалы и Каспийска' : state.city === 'Каспийск' ? 'Каспийска' : 'Махачкалы')} — только из проверенного каталога.</p>
           </div>
           <span class="promo-emoji" aria-hidden="true">🥙</span>
         </section>
@@ -585,7 +588,8 @@
           <h2 id="listTitle"></h2>
           <div class="bar-controls">
           <div class="segmented tabs city-switch" role="group" aria-label="Город">
-            ${cityNames().map((c) => `<button type="button" data-city="${esc(c)}" aria-pressed="${c === state.city}">${esc(c)}</button>`).join('')}
+            <button type="button" data-browse-city="" aria-pressed="${state.allCities}">Все города</button>
+            ${cityNames().map((c) => `<button type="button" data-browse-city="${esc(c)}" aria-pressed="${!state.allCities && c === state.city}">${esc(c)}</button>`).join('')}
           </div>
           <button class="pill" type="button" id="nearMe" aria-pressed="${!!state.userPos}">📍 Рядом со мной</button>
           <div class="segmented view-switch" role="group" aria-label="Вид">
@@ -1813,6 +1817,13 @@
       return;
     }
     if (d.city) { setCity(d.city); return; }
+    if ('browseCity' in d) {
+      state.allCities = !d.browseCity;
+      store.set('allCities', state.allCities);
+      if (d.browseCity && d.browseCity !== state.city) setCity(d.browseCity);
+      else renderHome();
+      return;
+    }
     if (d.info) { openInfo(d.info); return; }
     if (d.dish) { openDish(d.place, d.dish); return; }
     if (d.cat) {
