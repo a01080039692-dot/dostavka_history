@@ -61,6 +61,8 @@
     city: store.get('city', null),
     // «Все города» на главной: каталог без фильтра по городу. Город доставки (state.city) не меняется.
     allCities: store.get('allCities', false),
+    // Раскрытые карточки сетей (поле chain в data/places.js).
+    openChains: new Set(),
     category: 'all',
     query: '',
     view: 'grid',
@@ -494,7 +496,7 @@
       if (state.category !== 'all' && state.category !== 'delivery' && !p.categories.includes(state.category)) return false;
       if (!q) return true;
       const dishes = (MENUS.byPlace[p.id] || []).flatMap((s) => s.items.map((i) => i.name)).join(' ');
-      return (p.name + ' ' + (p.address || '') + ' ' + (p.description || '') + ' ' + dishes).toLowerCase().includes(q);
+      return (p.name + ' ' + (p.chain || '') + ' ' + (p.address || '') + ' ' + (p.description || '') + ' ' + dishes).toLowerCase().includes(q);
     });
     if (state.userPos) {
       list = list
@@ -554,6 +556,100 @@
         </div>
       </div>`;
   }
+  // Точки одной сети — одна группа; порядок групп — по первой (при «Рядом со мной» — ближайшей) точке.
+  function groupPlaces(places) {
+    const groups = [];
+    const byChain = {};
+    places.forEach((p) => {
+      if (p.chain && byChain[p.chain]) { byChain[p.chain].places.push(p); return; }
+      const g = { chain: p.chain || null, places: [p] };
+      if (p.chain) byChain[p.chain] = g;
+      groups.push(g);
+    });
+    return groups;
+  }
+
+  function chainMeta(g) {
+    const n = g.places.length;
+    const parts = [CATEGORIES[g.places[0].categories[0]], n + ' ' + plural(n, 'точка', 'точки', 'точек')];
+    const first = g.places[0];
+    if (state.userPos && first.coords) parts.push('от ' + distanceKm(state.userPos, first.coords).toFixed(1) + ' км');
+    else if (state.allCities) parts.push([...new Set(g.places.map((p) => p.city))].join(', '));
+    return esc(parts.join(' · '));
+  }
+
+  // Строка точки в списке сети: адрес, город (в режиме «Все города»), уточнение из названия вроде «экспресс».
+  function branchText(g, p) {
+    const suffix = p.name.startsWith(g.chain + ' · ') ? p.name.slice(g.chain.length + 3) : '';
+    const sub = [
+      state.allCities && p.city,
+      suffix && !(p.address || '').toLowerCase().includes(suffix.toLowerCase()) && suffix,
+      state.userPos && p.coords && distanceKm(state.userPos, p.coords).toFixed(1) + ' км'
+    ].filter(Boolean).join(' · ');
+    return `<b>${esc(p.address || p.name)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}`;
+  }
+
+  function chainToggleHtml(g) {
+    const open = state.openChains.has(g.chain);
+    return `<span class="chain-toggle">${open ? 'Скрыть точки ▴' : 'Показать точки ▾'}</span>`;
+  }
+
+  function chainCardHtml(g) {
+    if (g.places.length === 1) return cardHtml(g.places[0]);
+    const p = g.places[0];
+    const open = state.openChains.has(g.chain);
+    return `
+      <div class="card chain-card">
+        <button type="button" class="chain-head" data-chain="${esc(g.chain)}" aria-expanded="${open}">
+          <div class="card-cover">
+            ${coverHtml(p)}
+            <div class="cover-logo">${logoHtml(p)}</div>
+          </div>
+          <div class="card-body">
+            <h3>${esc(g.chain)}</h3>
+            <div class="card-meta">${chainMeta(g)}</div>
+            ${chainToggleHtml(g)}
+          </div>
+        </button>
+        <ul class="branches"${open ? '' : ' hidden'}>
+          ${g.places.map((b) => `<li><a href="#/place/${esc(b.id)}">${branchText(g, b)}</a></li>`).join('')}
+        </ul>
+      </div>`;
+  }
+
+  function chainRowHtml(g) {
+    if (g.places.length === 1) return rowCardHtml(g.places[0]);
+    const p = g.places[0];
+    const open = state.openChains.has(g.chain);
+    return `
+      <div class="row-group">
+        <button type="button" class="row-card chain-head" data-chain="${esc(g.chain)}" aria-expanded="${open}">
+          <div class="thumb">${coverHtml(p)}</div>
+          <div>
+            <h3>${esc(g.chain)}</h3>
+            <div class="card-meta">${chainMeta(g)}</div>
+            ${chainToggleHtml(g)}
+          </div>
+        </button>
+        <div class="branches"${open ? '' : ' hidden'}>
+          ${g.places.map((b) => `
+            <div class="branch-row${b.id === state.activePlaceId ? ' is-active' : ''}" data-place-row="${esc(b.id)}" tabindex="0">
+              <span>${branchText(g, b)}</span>
+              <a class="go" href="#/place/${esc(b.id)}">${MENUS.byPlace[b.id] ? 'Меню' : 'Подробнее'} →</a>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }
+
+  function toggleChain(btn) {
+    const chain = btn.dataset.chain;
+    const open = !state.openChains.has(chain);
+    if (open) state.openChains.add(chain); else state.openChains.delete(chain);
+    btn.setAttribute('aria-expanded', open);
+    btn.nextElementSibling.hidden = !open;
+    btn.querySelector('.chain-toggle').textContent = open ? 'Скрыть точки ▴' : 'Показать точки ▾';
+  }
+
 
   function renderHome() {
     destroyMap();
@@ -606,7 +702,8 @@
   function renderResults() {
     const places = filteredPlaces();
     const title = state.category === 'all' ? 'Все заведения' : CATEGORIES[state.category];
-    $('#listTitle').innerHTML = `${esc(title)}<small>${placesCount(places.length)}</small>`;
+    const groups = groupPlaces(places);
+    $('#listTitle').innerHTML = `${esc(title)}<small>${placesCount(groups.length)}</small>`;
     const box = $('#results');
     if (state.view === 'map') {
       if (!$('#map')) {
@@ -614,13 +711,13 @@
         initMap();
       }
       $('#list').innerHTML = places.length
-        ? places.map(rowCardHtml).join('')
+        ? groups.map(chainRowHtml).join('')
         : '<p class="empty">Ничего не нашлось</p>';
       renderMarkers(places);
     } else {
       destroyMap();
       box.innerHTML = places.length
-        ? `<div class="grid">${places.map(cardHtml).join('')}</div>`
+        ? `<div class="grid">${groups.map(chainCardHtml).join('')}</div>`
         : '<p class="empty">Ничего не нашлось. Попробуйте другую категорию или запрос.</p>';
     }
   }
@@ -673,6 +770,9 @@
       if (window.matchMedia('(max-width: 1024px)').matches) $('.map-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
     } else if (!fromList) {
       const row = document.querySelector(`[data-place-row="${CSS.escape(id)}"]`);
+      // Метка на карте могла принадлежать свёрнутой сети — раскрываем её список.
+      const list = row && row.closest('.branches');
+      if (list && list.hidden) toggleChain(list.previousElementSibling);
       if (row) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
   }
@@ -1839,6 +1939,7 @@
       return;
     }
     if (d.jump) { e.preventDefault(); jumpToSection(d.jump); return; }
+    if (d.chain) { toggleChain(t); return; }
     if (d.placeRow && !e.target.closest('a')) { highlight(d.placeRow, true); return; }
     if (d.share) {
       const url = d.share;

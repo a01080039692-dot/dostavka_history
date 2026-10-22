@@ -1,6 +1,7 @@
 // Заведения перенесены из проекта Halal Tracker (config.js).
 // categories: restaurant | fastfood | coffee | grocery; ownDelivery — у заведения есть доставка, по ней работает фильтр «Доставки»
 // (отметка «Доставки» из каталога Halal Tracker и заведения, добавленные вручную);
+// chain — название сети: точки с одинаковым chain показываются одной карточкой с раскрывающимся списком;
 // verified — заведение подтверждено владельцем каталога; logo — путь к логотипу; cover — фото для карточки; socials — [{label, url}].
 window.DOSTAVKA_DATA = {
   "cityCenters": {
@@ -26,6 +27,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "pech-izumrudnaya",
       "name": "Печь · Изумрудная",
+      "chain": "Печь",
       "city": "Махачкала",
       "categories": [
         "restaurant"
@@ -41,6 +43,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "pech-gagarina",
       "name": "Печь · Гагарина",
+      "chain": "Печь",
       "city": "Махачкала",
       "categories": [
         "restaurant"
@@ -56,6 +59,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "samburger-makh-korkmasova",
       "name": "Самбургер",
+      "chain": "Самбургер",
       "city": "Махачкала",
       "categories": [
         "fastfood"
@@ -71,6 +75,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "samburger-makh-yaragsky",
       "name": "Самбургер",
+      "chain": "Самбургер",
       "city": "Махачкала",
       "categories": [
         "fastfood"
@@ -104,6 +109,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "people-makh-abubakarova",
       "name": "People Coffee",
+      "chain": "People Coffee",
       "city": "Махачкала",
       "categories": [
         "coffee"
@@ -119,6 +125,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "people-makh-ermoshkina",
       "name": "People Coffee",
+      "chain": "People Coffee",
       "city": "Махачкала",
       "categories": [
         "coffee"
@@ -134,6 +141,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "people-makh-tankaeva",
       "name": "People Coffee",
+      "chain": "People Coffee",
       "city": "Махачкала",
       "categories": [
         "coffee"
@@ -149,6 +157,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "people-makh-shamilya",
       "name": "People Coffee · экспресс",
+      "chain": "People Coffee",
       "city": "Махачкала",
       "categories": [
         "coffee"
@@ -164,6 +173,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "people-makh-gamidova",
       "name": "People Coffee · экспресс",
+      "chain": "People Coffee",
       "city": "Махачкала",
       "categories": [
         "coffee"
@@ -194,6 +204,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "marsha-makh-lermontova",
       "name": "Marsha",
+      "chain": "Marsha",
       "city": "Махачкала",
       "categories": [
         "coffee"
@@ -209,6 +220,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "marsha-makh-kurbanova",
       "name": "Marsha",
+      "chain": "Marsha",
       "city": "Махачкала",
       "categories": [
         "coffee"
@@ -224,6 +236,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "marsha-makh-korkmasova",
       "name": "Marsha",
+      "chain": "Marsha",
       "city": "Махачкала",
       "categories": [
         "coffee"
@@ -248,6 +261,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "pah-pah-makh-gorkogo",
       "name": "Пах-Пах",
+      "chain": "Пах-Пах",
       "city": "Махачкала",
       "categories": [
         "fastfood"
@@ -263,6 +277,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "pah-pah-makh-batyraia",
       "name": "Пах-Пах",
+      "chain": "Пах-Пах",
       "city": "Махачкала",
       "categories": [
         "fastfood"
@@ -278,6 +293,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "samburger-kas",
       "name": "Самбургер",
+      "chain": "Самбургер",
       "city": "Каспийск",
       "categories": [
         "fastfood"
@@ -293,6 +309,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "fermer-bakhtiyar",
       "name": "Фермер · Амет-Хана Султана",
+      "chain": "Фермер",
       "city": "Махачкала",
       "categories": [
         "grocery"
@@ -315,6 +332,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "fermer-akushinskogo",
       "name": "Фермер · Акушинского",
+      "chain": "Фермер",
       "city": "Махачкала",
       "categories": [
         "grocery"
@@ -335,6 +353,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "fermer-kas-nazarova",
       "name": "Фермер · Назарова",
+      "chain": "Фермер",
       "city": "Каспийск",
       "categories": [
         "grocery"
@@ -356,6 +375,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "fermer-kas-kaspiyskaya",
       "name": "Фермер · Каспийская",
+      "chain": "Фермер",
       "city": "Каспийск",
       "categories": [
         "grocery"
@@ -377,6 +397,7 @@ window.DOSTAVKA_DATA = {
     {
       "id": "fermer-kas-magomedzhanova",
       "name": "Фермер · Магомеджанова",
+      "chain": "Фермер",
       "city": "Каспийск",
       "categories": [
         "grocery"

@@ -277,6 +277,19 @@ img { max-width: 100%; }
 .card-body h3 { font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
 .card-meta { margin-top: 4px; font-size: 14px; color: var(--muted); }
 
+/* Карточка сети: точки одной фирмы раскрываются списком */
+.chain-head { display: block; width: 100%; text-align: left; }
+.chain-card:hover .card-cover { transform: scale(1.015); }
+.chain-toggle { display: inline-block; margin-top: 6px; font-size: 14px; font-weight: 600; color: var(--accent); }
+.branches { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.branches a, .branch-row { display: block; padding: 8px 10px; border-radius: 12px; }
+.branches a:hover, .branch-row:hover, .branch-row.is-active { background: var(--surface); }
+.branches b { display: block; font-size: 14px; font-weight: 600; }
+.branches small { display: block; font-size: 13px; color: var(--muted); }
+.row-group .branches { margin: 0 0 4px 76px; }
+.branch-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; }
+.branch-row .go { flex: none; font-size: 13px; font-weight: 600; color: var(--accent); }
+
 /* Режим «На карте» */
 .map-layout {
   display: grid;
@@ -287,6 +300,8 @@ img { max-width: 100%; }
 }
 .map-list { overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 8px; }
 .row-card {
+  width: 100%;
+  text-align: left;
   display: grid;
   grid-template-columns: 64px 1fr;
   gap: 12px;
