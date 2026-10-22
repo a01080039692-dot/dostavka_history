@@ -67,6 +67,8 @@ img { max-width: 100%; }
 .btn-primary:disabled, .btn-primary[aria-disabled="true"] { background: #d6d3ce; color: #8e8b86; cursor: not-allowed; }
 .btn-block { width: 100%; min-height: 56px; font-size: 16px; border-radius: 16px; }
 .btn-block .btn-sum { margin-left: auto; }
+.send-place { margin-bottom: 10px; }
+.sent-note { margin-bottom: 8px; font-size: 14px; font-weight: 600; color: var(--ok); }
 .icon-btn {
   width: 40px;
   height: 40px;

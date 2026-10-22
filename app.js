@@ -404,11 +404,44 @@
       </div>
       ${freeProgressHtml(t)}
       ${totalsHtml(t)}
+      ${sendToPlaceHtml(place)}
       ${t.canOrder
-        ? `<a class="btn btn-primary btn-block" href="#/checkout"><span>Далее</span><span class="btn-sum">${rub(t.total)}</span></a>`
+        ? `<a class="btn btn-primary btn-block" href="#/checkout"><span>Заказать доставку</span><span class="btn-sum">${rub(t.total)}</span></a>`
         : `<p class="hint warn" style="margin-bottom:10px">Минимальная сумма заказа — ${rub(DELIVERY.minOrder)}. Добавьте ещё на ${rub(DELIVERY.minOrder - t.subtotal)}.</p>
-           <button class="btn btn-primary btn-block" type="button" disabled>Далее</button>`}
+           <button class="btn btn-primary btn-block" type="button" disabled>Заказать доставку</button>`}
       `;
+  }
+
+  // ---------- Отправка заказа заведению до заказа доставки ----------
+  // cart.sentKey — состав корзины на момент отправки; после изменения корзины отметка снимается.
+  function cartKey() {
+    return state.cart.placeId + ':' + JSON.stringify(Object.entries(state.cart.items).sort());
+  }
+
+  function cartSent() {
+    return !!state.cart.sentKey && state.cart.sentKey === cartKey();
+  }
+
+  function placeCartText() {
+    const lines = cartLines().map((l) => `• ${l.item.name} × ${l.qty} = ${rub(l.item.price * l.qty)}`).join('\n');
+    return [
+      'Здравствуйте! Заказ через Доставка History:',
+      lines,
+      `Сумма: ${rub(cartTotals().subtotal)}`,
+      'Доставку закажу отдельно — курьер заберёт заказ у вас.',
+      'Подтвердите, пожалуйста, наличие и время готовности.'
+    ].join('\n');
+  }
+
+  function sendToPlaceHtml(place) {
+    const phone = place && place.phones && place.phones[0];
+    if (!phone) return '';
+    const sent = cartSent();
+    return `
+      ${sent ? '<p class="sent-note">✓ Заказ отправлен заведению</p>' : ''}
+      <a class="btn btn-block send-place" href="https://wa.me/${esc(waPhone(phone))}?text=${encodeURIComponent(placeCartText())}" target="_blank" rel="noopener" data-send-place>
+        ${sent ? 'Отправить ещё раз' : 'Отправить заказ заведению'}
+      </a>`;
   }
 
   function renderCartIndicators() {
@@ -1329,6 +1362,7 @@
       </div>
       ${totalsHtml(t)}
       ${t.canOrder ? '' : `<p class="hint warn" style="margin-bottom:10px">Минимальная сумма заказа — ${rub(DELIVERY.minOrder)}.</p>`}
+      ${sendToPlaceHtml(place)}
       <button class="btn btn-primary btn-block" id="submitOrder" type="submit" form="checkoutForm" ${t.canOrder ? '' : 'disabled'}>
         <span>Заказать</span><span class="btn-sum">${t.feeKnown ? '' : 'от '}${rub(t.total)}</span>
       </button>
@@ -1448,6 +1482,7 @@
       scheduledAt: scheduledFrom(form),
       payment: v('payment'),
       comment: v('comment'),
+      sentToPlace: cartSent(),
       createdAt,
       cancelled: false,
       dispatchMode: BUS.driverOnline() ? 'driver' : 'demo'
@@ -1637,14 +1672,15 @@
     return `Приедет к ${fmtTime(pr.eta)} · через ${left} ${plural(left, 'минуту', 'минуты', 'минут')}`;
   }
 
+  // Если состав уже отправлен заведению из корзины (o.sentToPlace), шлём только данные доставки.
   function orderText(o) {
-    const lines = o.items.map((i) => `• ${i.name} × ${i.qty} = ${rub(i.price * i.qty)}`).join('\n');
+    const lines = o.sentToPlace ? '' : o.items.map((i) => `• ${i.name} × ${i.qty} = ${rub(i.price * i.qty)}`).join('\n');
     const to = o.to || {};
     const toLine = [to.label, to.flat && 'кв. ' + to.flat, to.entrance && 'подъезд ' + to.entrance, to.floor && 'этаж ' + to.floor, to.intercom && 'домофон ' + to.intercom].filter(Boolean).join(', ');
     return [
-      `Заказ №${o.number} (Доставка History)`,
+      o.sentToPlace ? `Доставка заказа №${o.number} (Доставка History) — состав отправили вам ранее` : `Заказ №${o.number} (Доставка History)`,
       lines,
-      `Товары: ${rub(o.subtotal)}`,
+      o.sentToPlace ? '' : `Товары: ${rub(o.subtotal)}`,
       `Доставка (курьер${o.route ? ', ' + fmtKm(o.route.distance) : ''}): ${rub(o.fee)}`,
       `Итого: ${rub(o.total)}`,
       `Имя: ${o.customer.name}`,
@@ -1752,7 +1788,7 @@
         <div class="muted" style="font-size:13px">${esc(PAYMENT[o.payment] || '')}</div>
       </div>
       <div class="order-actions">
-        ${o.type === 'food' && phone && !o.cancelled ? `<a class="btn btn-primary" href="https://wa.me/${phone}?text=${encodeURIComponent(orderText(o))}" target="_blank" rel="noopener">Отправить заказ заведению</a>` : ''}
+        ${o.type === 'food' && phone && !o.cancelled ? `<a class="btn btn-primary" href="https://wa.me/${phone}?text=${encodeURIComponent(orderText(o))}" target="_blank" rel="noopener">${o.sentToPlace ? 'Отправить данные доставки заведению' : 'Отправить заказ заведению'}</a>` : ''}
         <button class="btn" type="button" data-share="${esc(shareUrl)}">Поделиться</button>
         ${canCancel ? `<button class="btn" type="button" data-cancel="${esc(o.id)}">Отменить</button>` : ''}
         ${o.type === 'food' ? `<button class="btn" type="button" data-repeat="${esc(o.id)}">Повторить</button>` : ''}
@@ -1940,6 +1976,13 @@
     }
     if (d.jump) { e.preventDefault(); jumpToSection(d.jump); return; }
     if (d.chain) { toggleChain(t); return; }
+    if ('sendPlace' in d) {
+      // Ссылка открывает WhatsApp сама; отметку ставим после, чтобы не убрать ссылку до перехода.
+      state.cart.sentKey = cartKey();
+      saveCart();
+      setTimeout(() => refreshAfterCartChange(null, null), 0);
+      return;
+    }
     if (d.placeRow && !e.target.closest('a')) { highlight(d.placeRow, true); return; }
     if (d.share) {
       const url = d.share;
